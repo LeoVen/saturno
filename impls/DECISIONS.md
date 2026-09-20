@@ -327,4 +327,26 @@ Template for a new entry:
   reused here rather than inventing a second cross-Segment merge.
 - **Affected epics/tasks**: E08-T2.
 
+## D-25 — Teacher ↔ Subject qualification, to narrow the Assignment Teacher picker
+
+- **Date**: 2026-09-20
+- **Type**: Implementation-only
+- **Spec refs**: FR-9, D-12
+- **What changes**: Teacher gains `subjectIds: string[]` — the Subjects that
+  Teacher can teach, configured on the Teachers screen (a "Disciplinas que
+  leciona" checklist). The Assignments screen's Teacher checklist (FR-9)
+  now shows only Teachers qualified for that Assignment's Subject, plus any
+  Teacher already selected on it even if not (or no longer) qualified — so
+  existing data is never silently hidden. This is a UI-only filter: it adds
+  no new hard constraint to the solver (E06) or FR-13's validation, and an
+  Assignment's `teacherIds` (D-12) is unaffected in shape. Every read of
+  `subjectIds` defaults to `[]` (`?? []`), since Teacher records persisted
+  before this field existed don't have it.
+- **Why**: user-requested — with many Teachers and Subjects, picking from
+  the full unfiltered Teacher list per Assignment is tedious; most schools
+  only have a handful of Teachers per Subject.
+- **Affected epics/tasks**: E04 (`Teacher` entity, `TeachersConfig.vue`)
+  and E05 (`AssignmentsConfig.vue`'s Teacher picker) — both already `done`;
+  this is a retrofit, not a reopening of either epic's own checkpoint.
+
 *(entries above are the most recent)*

@@ -66,6 +66,11 @@ export const useEntitiesStore = defineStore('entities', {
     teacherById: (state) => {
       return (id: string): Teacher | undefined => state.teachers.find((t) => t.id === id)
     },
+    /** D-25: Teachers qualified for a Subject — narrows the picker on an Assignment (FR-9). */
+    teachersForSubject: (state) => {
+      return (subjectId: string): Teacher[] =>
+        state.teachers.filter((t) => (t.subjectIds ?? []).includes(subjectId))
+    },
     /**
      * D-17: a same-name Teacher is disambiguated with a display-only
      * ordinal ("Guilherme (2)") computed at render time from store array
@@ -260,13 +265,16 @@ export const useEntitiesStore = defineStore('entities', {
     removeSubject(id: string): void {
       this.subjects = this.subjects.filter((s) => s.id !== id)
       this.assignments = this.assignments.filter((a) => a.subjectId !== id)
+      for (const teacher of this.teachers) {
+        teacher.subjectIds = (teacher.subjectIds ?? []).filter((sid) => sid !== id)
+      }
     },
 
     addTeacher(name: string): string {
       // FR-2: names are intentionally not deduplicated/validated for
       // uniqueness — two Teachers may share a name and are distinct
       // entities, disambiguated by id.
-      const teacher: Teacher = { id: crypto.randomUUID(), name, unavailability: [] }
+      const teacher: Teacher = { id: crypto.randomUUID(), name, unavailability: [], subjectIds: [] }
       this.teachers.push(teacher)
       return teacher.id
     },
@@ -283,6 +291,26 @@ export const useEntitiesStore = defineStore('entities', {
       for (const assignment of this.assignments) {
         assignment.teacherIds = assignment.teacherIds.filter((tid) => tid !== id)
       }
+    },
+
+    /**
+     * D-25: which Subjects a Teacher can teach — narrows the Teacher picker
+     * on an Assignment (FR-9), nothing more. `?? []` throughout guards
+     * against Teacher records persisted before this field existed.
+     */
+    addTeacherSubject(teacherId: string, subjectId: string): boolean {
+      const teacher = this.teacherById(teacherId)
+      if (!teacher || !this.subjectById(subjectId)) return false
+      teacher.subjectIds = teacher.subjectIds ?? []
+      if (teacher.subjectIds.includes(subjectId)) return false
+      teacher.subjectIds.push(subjectId)
+      return true
+    },
+
+    removeTeacherSubject(teacherId: string, subjectId: string): void {
+      const teacher = this.teacherById(teacherId)
+      if (!teacher) return
+      teacher.subjectIds = (teacher.subjectIds ?? []).filter((id) => id !== subjectId)
     },
 
     addUnavailability(

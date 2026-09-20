@@ -31,6 +31,19 @@ const currentAssignment = computed(() =>
     : undefined,
 )
 
+// D-25: narrow the Teacher picker to those qualified for this Assignment's
+// Subject — but never hide a Teacher already selected on it, even if they
+// were added before being marked qualified (or their qualification was
+// later removed), so existing data is never silently dropped from view.
+const eligibleTeachers = computed(() => {
+  if (!selectedSubjectId.value) return []
+  const qualified = store.teachersForSubject(selectedSubjectId.value)
+  const alreadyAssigned = currentAssignment.value?.teacherIds ?? []
+  const seen = new Set(qualified.map((t) => t.id))
+  const extra = store.teachers.filter((t) => alreadyAssigned.includes(t.id) && !seen.has(t.id))
+  return [...qualified, ...extra]
+})
+
 function createAssignment(): void {
   if (!selectedClassId.value || !selectedSubjectId.value) return
   store.addAssignment(selectedClassId.value, selectedSubjectId.value)
@@ -138,7 +151,7 @@ function zeroOverlapMessage(assignmentId: string, teacherId: string, classId: st
 
         <fieldset>
           <legend class="field-label">Professores</legend>
-          <label v-for="t in store.teachers" :key="t.id" class="field field-inline">
+          <label v-for="t in eligibleTeachers" :key="t.id" class="field field-inline">
             <input
               type="checkbox"
               :checked="currentAssignment.teacherIds.includes(t.id)"
@@ -147,6 +160,9 @@ function zeroOverlapMessage(assignmentId: string, teacherId: string, classId: st
             <span>{{ store.teacherLabel(t.id) }}</span>
           </label>
           <p v-if="!store.teachers.length" class="empty">Nenhum professor cadastrado.</p>
+          <p v-else-if="!eligibleTeachers.length" class="empty">
+            Nenhum professor cadastrado para esta disciplina. Configure em "Professores".
+          </p>
         </fieldset>
 
         <button

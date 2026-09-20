@@ -29,6 +29,16 @@ function deleteTeacher(id: string): void {
   if (selectedTeacherId.value === id) selectedTeacherId.value = ''
 }
 
+// D-25: which Subjects this Teacher can teach — narrows the Teacher picker
+// shown when building an Assignment (Turma x Disciplina).
+function toggleSubject(teacherId: string, subjectId: string, event: Event): void {
+  if ((event.target as HTMLInputElement).checked) {
+    store.addTeacherSubject(teacherId, subjectId)
+  } else {
+    store.removeTeacherSubject(teacherId, subjectId)
+  }
+}
+
 // FR-11: per-Teacher optional daily/consecutive-period limits.
 type LimitField = 'maxPeriodsPerDay' | 'minConsecutivePeriods' | 'maxConsecutivePeriods'
 const limitsError = ref('')
@@ -128,7 +138,21 @@ function toggleCell(weekday: Weekday, rowKey: string): void {
       />
     </label>
 
-    <h4>Limites do professor</h4>
+    <h4>Disciplinas que leciona</h4>
+    <p class="muted">Usado para filtrar quem aparece ao escolher professores em "Atribuições".</p>
+    <fieldset class="subject-list">
+      <label v-for="s in store.subjects" :key="s.id" class="field field-inline">
+        <input
+          type="checkbox"
+          :checked="(selectedTeacher.subjectIds ?? []).includes(s.id)"
+          @change="toggleSubject(selectedTeacher.id, s.id, $event)"
+        />
+        <span>{{ s.name }}</span>
+      </label>
+      <p v-if="!store.subjects.length" class="empty">Nenhuma disciplina cadastrada.</p>
+    </fieldset>
+
+    <h4 style="margin-top: var(--space-4)">Limites do professor</h4>
     <div class="row">
       <label class="field">
         <span class="field-label">Máx. de aulas por dia</span>
@@ -184,6 +208,15 @@ function toggleCell(weekday: Weekday, rowKey: string): void {
 </template>
 
 <style scoped>
+.subject-list {
+  border: none;
+  padding: 0;
+  margin: 0 0 var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
 .avail-cell {
   width: 100%;
   height: 100%;

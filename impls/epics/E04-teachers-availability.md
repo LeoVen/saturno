@@ -79,3 +79,5 @@ distinct entities — and define each Teacher's recurring weekly availability.
   human walks through the steps above and flips them to `done`.
 - **Human verification confirmed** (2026-09-20): user reviewed and signed
   off ("looks good"). E04-T5 and the epic moved to `done`.
+- **Retrofit** (2026-09-20): Teacher gained `subjectIds` (which Subjects it
+  can teach) after this epic closed — see [D-25](../DECISIONS.md).

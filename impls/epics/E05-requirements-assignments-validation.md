@@ -106,3 +106,5 @@ generation is ever attempted.
   `done`.
 - **Human verification confirmed** (2026-09-20): user reviewed and signed
   off ("Looks good"). E05-T8 and the epic moved to `done`.
+- **Retrofit** (2026-09-20): the Assignment Teacher picker (FR-9) is now
+  narrowed to Teachers qualified for that Subject — see [D-25](../DECISIONS.md).

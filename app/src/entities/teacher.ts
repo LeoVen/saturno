@@ -7,6 +7,10 @@
 // Segments don't share a period structure.
 // D-11: a Teacher defaults to fully available; the user records exceptions
 // (UnavailabilityRange) rather than opting every period in.
+// D-25: `subjectIds` is a data-entry aid (which Subjects this Teacher can
+// teach), used to narrow the Teacher picker on an Assignment (FR-9) — not a
+// new hard constraint, and an Assignment's own `teacherIds` (D-12) is
+// unaffected in shape.
 
 import type { ClockTime } from './time'
 import type { Weekday } from './weekday'
@@ -22,6 +26,8 @@ export interface Teacher {
   id: string
   name: string
   unavailability: UnavailabilityRange[]
+  /** D-25: which Subjects this Teacher can teach. */
+  subjectIds: string[]
   /** FR-11: all three limits are optional — undefined means "no limit configured". */
   maxPeriodsPerDay?: number
   minConsecutivePeriods?: number

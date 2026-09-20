@@ -246,6 +246,54 @@ describe('entities store — Teachers', () => {
     const id = store.addTeacher('Guilherme')
     expect(store.teacherById(id)?.unavailability).toEqual([])
   })
+
+  it('starts with no Subject qualifications (D-25)', () => {
+    const store = useEntitiesStore()
+    const id = store.addTeacher('Guilherme')
+    expect(store.teacherById(id)?.subjectIds).toEqual([])
+  })
+})
+
+describe('entities store — Teacher Subjects (D-25)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('adds and removes a Subject qualification', () => {
+    const store = useEntitiesStore()
+    const teacherId = store.addTeacher('Guilherme')
+    const subjectId = store.addSubject('Matemática')
+
+    expect(store.addTeacherSubject(teacherId, subjectId)).toBe(true)
+    expect(store.teacherById(teacherId)?.subjectIds).toEqual([subjectId])
+    expect(store.teachersForSubject(subjectId).map((t) => t.id)).toEqual([teacherId])
+
+    store.removeTeacherSubject(teacherId, subjectId)
+    expect(store.teacherById(teacherId)?.subjectIds).toEqual([])
+    expect(store.teachersForSubject(subjectId)).toEqual([])
+  })
+
+  it('refuses to add a duplicate or an unknown Teacher/Subject', () => {
+    const store = useEntitiesStore()
+    const teacherId = store.addTeacher('Guilherme')
+    const subjectId = store.addSubject('Matemática')
+
+    store.addTeacherSubject(teacherId, subjectId)
+    expect(store.addTeacherSubject(teacherId, subjectId)).toBe(false)
+    expect(store.addTeacherSubject('missing', subjectId)).toBe(false)
+    expect(store.addTeacherSubject(teacherId, 'missing')).toBe(false)
+    expect(store.teacherById(teacherId)?.subjectIds).toEqual([subjectId])
+  })
+
+  it('removing a Subject cleans up every Teacher that was qualified for it', () => {
+    const store = useEntitiesStore()
+    const teacherId = store.addTeacher('Guilherme')
+    const subjectId = store.addSubject('Matemática')
+    store.addTeacherSubject(teacherId, subjectId)
+
+    store.removeSubject(subjectId)
+    expect(store.teacherById(teacherId)?.subjectIds).toEqual([])
+  })
 })
 
 describe('entities store — teacherLabel (D-17)', () => {
