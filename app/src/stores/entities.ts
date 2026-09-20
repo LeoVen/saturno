@@ -7,13 +7,7 @@ import type { Teacher, UnavailabilityRange } from '../entities/teacher'
 import type { Weekday } from '../entities/weekday'
 import type { Assignment } from '../entities/assignment'
 import { MAX_CONSECUTIVE_PERIODS } from '../entities/assignment'
-import {
-  distinctSortedRanges,
-  hourlyPeriods,
-  isValidRange,
-  sortByStart,
-  subtractRange,
-} from '../entities/time'
+import { hourlyPeriods, isValidRange, sortByStart, subtractRange } from '../entities/time'
 import type { TimeRangeValue } from '../entities/time'
 import { sortByWeekdayThenStart } from '../entities/weekday'
 import {
@@ -23,6 +17,13 @@ import {
 } from '../entities/validation'
 import type { AssignmentAvailabilityCheck, ClassLoad } from '../entities/validation'
 import { moveItem, moveItemWithinGroup, type MoveDirection } from '../entities/reorder'
+
+/** One Segment's worth of Teacher Availability grid rows (D-29) — `segmentId`/`segmentName` are `null` for the no-Segment-configured-yet fallback group. */
+export interface AvailabilityGridGroup {
+  segmentId: string | null
+  segmentName: string | null
+  periods: TimeRangeValue[]
+}
 
 /**
  * The entities store (IMPL.md §7): source of truth for school configuration,
@@ -111,14 +112,26 @@ export const useEntitiesStore = defineStore('entities', {
         state.assignments.find((a) => a.classId === classId && a.subjectId === subjectId)
     },
     /**
-     * D-15: the WeekGrid's row boundaries for Teacher Availability — every
-     * Time Slot configured across every Segment, merged and de-duplicated,
-     * since availability isn't tied to any one Segment's period grid
-     * (D-01). Falls back to a plain hourly grid when no Segment exists yet.
+     * D-29 (supersedes D-15): the Teacher Availability grid's rows, grouped
+     * one block per Segment rather than merged into a single flat,
+     * time-sorted list. Two Segments' Time Slots can interleave in real
+     * time without being the same period sequence (D-01) — e.g. Segment A's
+     * 08:40-09:30 next to Segment B's 08:55-09:45 — so merging them made
+     * the grid look like one continuous run of back-to-back periods when
+     * it wasn't. A Segment with no Time Slots contributes no group; falls
+     * back to a single ungrouped hourly grid when no Segment has any yet.
      */
-    availabilityGridPeriods(): TimeRangeValue[] {
-      const merged = distinctSortedRanges(this.segments.flatMap((s) => s.timeSlots))
-      return merged.length > 0 ? merged : hourlyPeriods(7, 19)
+    availabilityGridGroups(): AvailabilityGridGroup[] {
+      const groups: AvailabilityGridGroup[] = this.segments
+        .filter((s) => s.timeSlots.length > 0)
+        .map((s) => ({
+          segmentId: s.id,
+          segmentName: s.name,
+          periods: s.timeSlots.map((t): TimeRangeValue => ({ start: t.start, end: t.end })),
+        }))
+      return groups.length > 0
+        ? groups
+        : [{ segmentId: null, segmentName: null, periods: hourlyPeriods(7, 19) }]
     },
     /** Every Time Slot (across all 5 weekdays) the given Class is schedulable during, via its Grade's Segment. */
     classWeeklyPeriods() {

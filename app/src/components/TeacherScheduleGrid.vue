@@ -7,9 +7,9 @@ import type { Schedule } from '../wasm/types'
 
 // FR-21: the Per-Teacher weekly grid — that Teacher's assignments (Class +
 // Subject) across every Class they teach. A Teacher can cross Segments with
-// different period grids (D-01), so rows are the same cross-Segment union
-// WeekGrid uses for Teacher Availability (D-15's `availabilityGridPeriods`)
-// rather than one Segment's own Time Slots.
+// different period grids (D-01), so this shows one grid per Segment (D-29)
+// rather than merging every Segment's Time Slots into one misleadingly
+// continuous list.
 
 const props = defineProps<{ schedule: Schedule | null }>()
 
@@ -36,10 +36,13 @@ const gridColumns: WeekGridColumn[] = WEEKDAYS.map((day) => ({
   label: WEEKDAY_LABELS[day],
 }))
 
-const gridRows = computed<WeekGridRow[]>(() =>
-  entities.availabilityGridPeriods.map((p) => ({
-    key: `${p.start}-${p.end}`,
-    label: `${p.start}–${p.end}`,
+const gridGroups = computed(() =>
+  entities.availabilityGridGroups.map((group) => ({
+    ...group,
+    rows: group.periods.map((p): WeekGridRow => ({
+      key: `${p.start}-${p.end}`,
+      label: `${p.start}–${p.end}`,
+    })),
   })),
 )
 
@@ -89,17 +92,30 @@ function cellContent(weekday: string, rowKey: string): CellContent | undefined {
     </select>
   </label>
 
-  <WeekGrid
-    v-if="selectedTeacherId"
-    :columns="gridColumns"
-    :rows="gridRows"
-    style="margin-top: var(--space-4)"
+  <div
+    v-for="group in selectedTeacherId ? gridGroups : []"
+    :key="group.segmentId ?? 'sem-segmento'"
+    class="grid-group"
   >
-    <template #cell="{ column, row }">
-      <div v-if="cellContent(column.key, row.key)" class="pill">
-        {{ cellContent(column.key, row.key)!.classLabel }}<br />
-        <small>{{ cellContent(column.key, row.key)!.subject }}</small>
-      </div>
-    </template>
-  </WeekGrid>
+    <h5 v-if="group.segmentName">{{ group.segmentName }}</h5>
+    <WeekGrid :columns="gridColumns" :rows="group.rows">
+      <template #cell="{ column, row }">
+        <div v-if="cellContent(column.key, row.key)" class="pill">
+          {{ cellContent(column.key, row.key)!.classLabel }}<br />
+          <small>{{ cellContent(column.key, row.key)!.subject }}</small>
+        </div>
+      </template>
+    </WeekGrid>
+  </div>
 </template>
+
+<style scoped>
+.grid-group {
+  margin-top: var(--space-4);
+}
+
+.grid-group h5 {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-muted);
+}
+</style>

@@ -425,4 +425,27 @@ Template for a new entry:
   still `in-review`, so this isn't a reopening of any epic's checkpoint
   either way, just an amendment to files those epics already introduced.
 
+## D-29 — Teacher Availability/schedule grids: one block per Segment, not merged
+
+- **Date**: 2026-09-20
+- **Type**: Clarification (supersedes D-15's flat-merge design)
+- **Spec refs**: FR-3, D-01, D-15, D-24
+- **What changes**: the Teacher Availability grid (Professores) and the
+  Per-Teacher schedule view (E08, FR-21) now render one `WeekGrid` per
+  Segment, each labeled with the Segment's name, instead of merging every
+  Segment's Time Slots into a single flat, time-sorted row list. The store
+  getter backing this is renamed `availabilityGridGroups` (was
+  `availabilityGridPeriods`), returning one group per Segment (falling
+  back to a single ungrouped hourly grid when no Segment has any Time Slot
+  yet) instead of one deduplicated flat array — `distinctSortedRanges`
+  (only ever used by the old getter) is removed as dead code.
+- **Why**: user-reported — two Segments' Time Slots can genuinely
+  interleave in real time (e.g. 08:40-09:30 next to 08:55-09:45) without
+  being the same period sequence (D-01), and a single merged grid made
+  this look like one continuous run of back-to-back periods, which isn't
+  what's happening and was actively confusing to read.
+- **Affected epics/tasks**: E04 (`TeachersConfig.vue`, `entities.ts`),
+  already `done`; E08 (`TeacherScheduleGrid.vue`), still `in-review` —
+  neither epic's checkpoint is reopened, this amends files they introduced.
+
 *(entries above are the most recent)*

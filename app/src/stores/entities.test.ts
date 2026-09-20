@@ -522,31 +522,58 @@ describe('entities store — setAvailability (WeekGrid click-to-toggle)', () => 
   })
 })
 
-describe('entities store — availabilityGridPeriods (D-15)', () => {
+describe('entities store — availabilityGridGroups (D-29)', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
   })
 
-  it('falls back to an hourly grid when no Segment is configured', () => {
+  it('falls back to a single ungrouped hourly grid when no Segment is configured', () => {
     const store = useEntitiesStore()
-    expect(store.availabilityGridPeriods[0]).toEqual({ start: '07:00', end: '08:00' })
-    expect(store.availabilityGridPeriods).toHaveLength(12)
+    expect(store.availabilityGridGroups).toEqual([
+      { segmentId: null, segmentName: null, periods: expect.arrayContaining([]) },
+    ])
+    expect(store.availabilityGridGroups[0]!.periods[0]).toEqual({ start: '07:00', end: '08:00' })
+    expect(store.availabilityGridGroups[0]!.periods).toHaveLength(12)
   })
 
-  it('merges and de-duplicates Time Slots across every Segment', () => {
+  it('keeps each Segment as its own group, never merging their Time Slots', () => {
     const store = useEntitiesStore()
     const efId = store.addSegment('EF')
     store.addTimeSlot(efId, '08:00', '08:50')
     store.addTimeSlot(efId, '08:50', '09:40')
     const emId = store.addSegment('EM')
-    store.addTimeSlot(emId, '08:00', '08:50') // exact duplicate across Segments
+    // Interleaves with EF's periods in real time (D-01) — a merged view
+    // would misleadingly look like one continuous sequence.
+    store.addTimeSlot(emId, '08:40', '09:30')
     store.addTimeSlot(emId, '07:00', '07:50')
 
-    expect(store.availabilityGridPeriods.map(({ start, end }) => ({ start, end }))).toEqual([
-      { start: '07:00', end: '07:50' },
-      { start: '08:00', end: '08:50' },
-      { start: '08:50', end: '09:40' },
+    expect(store.availabilityGridGroups).toEqual([
+      {
+        segmentId: efId,
+        segmentName: 'EF',
+        periods: [
+          { start: '08:00', end: '08:50' },
+          { start: '08:50', end: '09:40' },
+        ],
+      },
+      {
+        segmentId: emId,
+        segmentName: 'EM',
+        periods: [
+          { start: '07:00', end: '07:50' },
+          { start: '08:40', end: '09:30' },
+        ],
+      },
     ])
+  })
+
+  it('omits a Segment with no Time Slots configured yet', () => {
+    const store = useEntitiesStore()
+    const efId = store.addSegment('EF')
+    store.addTimeSlot(efId, '08:00', '08:50')
+    store.addSegment('EM (sem períodos ainda)')
+
+    expect(store.availabilityGridGroups.map((g) => g.segmentId)).toEqual([efId])
   })
 })
 

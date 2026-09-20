@@ -54,16 +54,3 @@ export function hourlyPeriods(startHour: number, endHour: number): TimeRangeValu
   }
   return periods
 }
-
-/** Sorted, de-duplicated (by exact start+end) list of ranges — e.g. Time Slots merged across several Segments. */
-export function distinctSortedRanges<T extends TimeRangeValue>(ranges: T[]): T[] {
-  const seen = new Set<string>()
-  const result: T[] = []
-  for (const range of sortByStart(ranges)) {
-    const key = `${range.start}-${range.end}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    result.push(range)
-  }
-  return result
-}

@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  distinctSortedRanges,
-  hourlyPeriods,
-  isValidRange,
-  rangesOverlap,
-  sortByStart,
-  subtractRange,
-} from './time'
+import { hourlyPeriods, isValidRange, rangesOverlap, sortByStart, subtractRange } from './time'
 
 describe('isValidRange', () => {
   it('accepts a start strictly before end', () => {
@@ -98,28 +91,6 @@ describe('subtractRange', () => {
       { start: '08:00', end: '09:00', id: 'r1' },
       { start: '10:00', end: '12:00', id: 'r1' },
     ])
-  })
-})
-
-describe('distinctSortedRanges', () => {
-  it('sorts and removes exact duplicates', () => {
-    const ranges = [
-      { start: '09:00', end: '09:50' },
-      { start: '08:00', end: '08:50' },
-      { start: '08:00', end: '08:50' },
-    ]
-    expect(distinctSortedRanges(ranges)).toEqual([
-      { start: '08:00', end: '08:50' },
-      { start: '09:00', end: '09:50' },
-    ])
-  })
-
-  it('keeps ranges that overlap but are not exact duplicates', () => {
-    const ranges = [
-      { start: '08:00', end: '08:50' },
-      { start: '08:00', end: '09:00' },
-    ]
-    expect(distinctSortedRanges(ranges)).toHaveLength(2)
   })
 })
 

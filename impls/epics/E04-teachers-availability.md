@@ -83,3 +83,6 @@ distinct entities — and define each Teacher's recurring weekly availability.
   can teach) after this epic closed — see [D-25](../DECISIONS.md).
 - **Retrofit** (2026-09-20): the Teachers list gained manual up/down
   reordering — see [D-26](../DECISIONS.md).
+- **Retrofit** (2026-09-20): the Availability grid now shows one block per
+  Segment instead of merging them into one flat row list — see
+  [D-29](../DECISIONS.md).

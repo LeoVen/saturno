@@ -58,15 +58,20 @@ function onLimitChange(field: LimitField, event: Event): void {
     : 'Valor inválido: use um número inteiro positivo, com mínimo ≤ máximo.'
 }
 
-// Availability grid (D-15): columns are the 5 weekdays, rows are every
-// configured Segment's Time Slots merged (or a default hourly grid if none
-// exist yet) — a real visual weekly grid, click-to-toggle per cell.
+// Availability grid (D-29): columns are the 5 weekdays; rows are shown as
+// one grid per Segment (or a single ungrouped hourly grid if none has any
+// Time Slot yet) rather than one merged, time-sorted list — two Segments'
+// periods can interleave in real time without being the same sequence
+// (D-01), which made a single flat grid look misleadingly continuous.
 const columns: WeekGridColumn[] = WEEKDAYS.map((day) => ({ key: day, label: WEEKDAY_LABELS[day] }))
 
-const rows = computed<WeekGridRow[]>(() =>
-  store.availabilityGridPeriods.map((p) => ({
-    key: `${p.start}-${p.end}`,
-    label: `${p.start}–${p.end}`,
+const availabilityGroups = computed(() =>
+  store.availabilityGridGroups.map((group) => ({
+    ...group,
+    rows: group.periods.map((p): WeekGridRow => ({
+      key: `${p.start}-${p.end}`,
+      label: `${p.start}–${p.end}`,
+    })),
   })),
 )
 
@@ -211,17 +216,24 @@ function toggleCell(weekday: Weekday, rowKey: string): void {
       como indisponível (ex.: apenas terça à tarde) — clique novamente para voltar a disponível.
     </p>
 
-    <WeekGrid :columns="columns" :rows="rows">
-      <template #cell="{ column, row }">
-        <button
-          type="button"
-          class="avail-cell"
-          :class="{ unavailable: isUnavailable(column.key as Weekday, row.key) }"
-          :aria-label="`${column.label} ${row.label}`"
-          @click="toggleCell(column.key as Weekday, row.key)"
-        ></button>
-      </template>
-    </WeekGrid>
+    <div
+      v-for="group in availabilityGroups"
+      :key="group.segmentId ?? 'sem-segmento'"
+      class="availability-group"
+    >
+      <h5 v-if="group.segmentName">{{ group.segmentName }}</h5>
+      <WeekGrid :columns="columns" :rows="group.rows">
+        <template #cell="{ column, row }">
+          <button
+            type="button"
+            class="avail-cell"
+            :class="{ unavailable: isUnavailable(column.key as Weekday, row.key) }"
+            :aria-label="`${group.segmentName ?? ''} ${column.label} ${row.label}`"
+            @click="toggleCell(column.key as Weekday, row.key)"
+          ></button>
+        </template>
+      </WeekGrid>
+    </div>
   </div>
 </template>
 
@@ -233,6 +245,15 @@ function toggleCell(weekday: Weekday, rowKey: string): void {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
+}
+
+.availability-group + .availability-group {
+  margin-top: var(--space-4);
+}
+
+.availability-group h5 {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-muted);
 }
 
 .avail-cell {
