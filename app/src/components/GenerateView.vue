@@ -2,24 +2,17 @@
 import { computed, ref } from 'vue'
 import { useEntitiesStore } from '../stores/entities'
 import { useGenerationStore } from '../stores/generation'
-import WeekGrid, { type WeekGridColumn, type WeekGridRow } from './WeekGrid.vue'
-import { WEEKDAYS, type Weekday } from '../entities/weekday'
+import { useScheduleVersionsStore } from '../stores/scheduleVersions'
+import ScheduleGrid from './ScheduleGrid.vue'
 
 // E06: the first screen where Saturno actually produces a schedule
-// (FR-14/FR-16). The full per-Class/per-Teacher views (FR-20/21) are E08's
-// job — this is a minimal grid sufficient to spot-check the epic's Human
-// Verification steps, not the final views screen.
-
-const WEEKDAY_LABELS: Record<Weekday, string> = {
-  mon: 'Segunda',
-  tue: 'Terça',
-  wed: 'Quarta',
-  thu: 'Quinta',
-  fri: 'Sexta',
-}
+// (FR-14/FR-16). E07-T2: a feasible result can be saved as a named
+// Schedule Version from here — the Versões screen owns switching/
+// duplicating/renaming from that point on.
 
 const entities = useEntitiesStore()
 const generation = useGenerationStore()
+const scheduleVersions = useScheduleVersionsStore()
 
 function classLabel(classId: string): string {
   const schoolClass = entities.classById(classId)
@@ -51,57 +44,14 @@ async function onGenerate(): Promise<void> {
   await generation.generate()
 }
 
-const allClasses = computed(() =>
-  [...entities.classes]
-    .map((c) => ({ id: c.id, label: classLabel(c.id) }))
-    .sort((a, b) => a.label.localeCompare(b.label)),
-)
+const newVersionName = ref('')
+const savedVersionId = ref('')
 
-const selectedClassId = ref('')
-
-const gridColumns: WeekGridColumn[] = WEEKDAYS.map((day) => ({
-  key: day,
-  label: WEEKDAY_LABELS[day],
-}))
-
-const gridRows = computed<WeekGridRow[]>(() => {
-  if (!selectedClassId.value) return []
-  return entities.classWeeklyPeriods(selectedClassId.value).length
-    ? timeSlotsFor(selectedClassId.value).map((slot) => ({
-        key: slot.id,
-        label: `${slot.start}–${slot.end}`,
-      }))
-    : []
-})
-
-function timeSlotsFor(classId: string): { id: string; start: string; end: string }[] {
-  const schoolClass = entities.classById(classId)
-  const grade = schoolClass ? entities.gradeById(schoolClass.gradeId) : undefined
-  const segment = grade ? entities.segmentById(grade.segmentId) : undefined
-  return segment?.timeSlots ?? []
-}
-
-interface CellContent {
-  subject: string
-  teacher: string
-}
-
-const placementsByCell = computed<Map<string, CellContent>>(() => {
-  const map = new Map<string, CellContent>()
-  const schedule = generation.schedule
-  if (!schedule || !selectedClassId.value) return map
-  for (const p of schedule.placements) {
-    if (p.classId !== selectedClassId.value) continue
-    map.set(`${p.weekday}:${p.timeSlotId}`, {
-      subject: entities.subjectById(p.subjectId)?.name ?? '?',
-      teacher: entities.teacherLabel(p.teacherId),
-    })
-  }
-  return map
-})
-
-function cellContent(weekday: string, timeSlotId: string): CellContent | undefined {
-  return placementsByCell.value.get(`${weekday}:${timeSlotId}`)
+function saveAsVersion(): void {
+  const name = newVersionName.value.trim()
+  if (!name || !generation.schedule) return
+  savedVersionId.value = scheduleVersions.createFromSchedule(name, generation.schedule)
+  newVersionName.value = ''
 }
 </script>
 
@@ -147,29 +97,23 @@ function cellContent(weekday: string, timeSlotId: string): CellContent | undefin
       Erro ao gerar o horário: {{ generation.errorMessage }}
     </p>
     <p v-if="generation.status === 'feasible'" class="muted">Horário gerado com sucesso.</p>
+
+    <form
+      v-if="generation.status === 'feasible'"
+      class="row"
+      style="margin-top: var(--space-3)"
+      @submit.prevent="saveAsVersion"
+    >
+      <label class="field">
+        <span class="field-label">Nome da versão</span>
+        <input v-model="newVersionName" class="input" type="text" placeholder="ex.: 2026" />
+      </label>
+      <button type="submit" class="btn">Salvar como nova versão</button>
+    </form>
+    <p v-if="savedVersionId" class="muted">Versão salva. Veja e gerencie em "Versões".</p>
   </div>
 
   <div v-if="generation.status === 'feasible'" class="card">
-    <label class="field">
-      <span class="field-label">Ver turma</span>
-      <select v-model="selectedClassId" class="input">
-        <option value="" disabled>Selecione…</option>
-        <option v-for="c in allClasses" :key="c.id" :value="c.id">{{ c.label }}</option>
-      </select>
-    </label>
-
-    <WeekGrid
-      v-if="selectedClassId"
-      :columns="gridColumns"
-      :rows="gridRows"
-      style="margin-top: var(--space-4)"
-    >
-      <template #cell="{ column, row }">
-        <div v-if="cellContent(column.key, row.key)" class="pill">
-          {{ cellContent(column.key, row.key)!.subject }}<br />
-          <small>{{ cellContent(column.key, row.key)!.teacher }}</small>
-        </div>
-      </template>
-    </WeekGrid>
+    <ScheduleGrid :schedule="generation.schedule" />
   </div>
 </template>

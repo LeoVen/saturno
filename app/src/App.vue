@@ -7,6 +7,7 @@ import SubjectsConfig from './components/SubjectsConfig.vue'
 import TeachersConfig from './components/TeachersConfig.vue'
 import AssignmentsConfig from './components/AssignmentsConfig.vue'
 import GenerateView from './components/GenerateView.vue'
+import ScheduleVersionsView from './components/ScheduleVersionsView.vue'
 
 // INTERLUDE-1-T1: sections are reachable via a persistent sidebar, not one
 // long scrolling page. Each section owns whatever selection state it needs
@@ -18,6 +19,7 @@ const SECTIONS: SidebarSection[] = [
   { key: 'teachers', label: 'Professores' },
   { key: 'assignments', label: 'Atribuições' },
   { key: 'generate', label: 'Gerar Horário' },
+  { key: 'versions', label: 'Versões' },
 ]
 
 const activeSection = ref(SECTIONS[0]!.key)
@@ -33,6 +35,7 @@ const activeSection = ref(SECTIONS[0]!.key)
       <TeachersConfig v-else-if="activeSection === 'teachers'" />
       <AssignmentsConfig v-else-if="activeSection === 'assignments'" />
       <GenerateView v-else-if="activeSection === 'generate'" />
+      <ScheduleVersionsView v-else-if="activeSection === 'versions'" />
     </main>
   </div>
 </template>

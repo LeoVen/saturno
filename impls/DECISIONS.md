@@ -296,4 +296,19 @@ Template for a new entry:
   cross-Segment modeling for Teachers.
 - **Affected epics/tasks**: E06-T1, E06-T2.
 
+## D-23 — Duplicating a Schedule Version: default name, no up-front prompt
+
+- **Date**: 2026-09-20
+- **Type**: Implementation-only
+- **Spec refs**: FR-24
+- **What changes**: clicking "Duplicar" on a Schedule Version immediately
+  creates a copy named `"{original name} (cópia)"` and makes it the active
+  version, rather than prompting for a name first. The user renames it
+  afterward (inline, same as any other version) if they want something
+  else.
+- **Why**: keeps the interaction to one click for the common case, and
+  reuses the same inline-rename control every version already has instead
+  of a second, one-off naming UI.
+- **Affected epics/tasks**: E07-T3 (`ScheduleVersionsView.vue`).
+
 *(entries above are the most recent)*
