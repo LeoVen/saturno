@@ -487,4 +487,22 @@ Template for a new entry:
   `WeekGrid.vue`'s new slot is additive and doesn't change any existing
   consumer's behavior. A retrofit, not a reopening of E04's checkpoint.
 
+## D-32 — Assignment defaults: double period + same-day repetition allowed
+
+- **Date**: 2026-09-20
+- **Type**: Implementation-only
+- **Spec refs**: FR-10, FR-12
+- **What changes**: a newly created Assignment now defaults to
+  `consecutivePeriods: 2` (double period) and `allowSameDayRepetition:
+  true`, instead of `1` (no block) and `false`. `weeklyOccurrences` stays
+  at `1`. Only affects new Assignments going forward — existing ones are
+  untouched.
+- **Why**: user-reported from actually filling in real Assignment data —
+  double periods with same-day repetition allowed turned out to be the
+  common case, not the exception, so it's less clicking to default there
+  and override for the minority that need independent single periods
+  and/or the stricter no-repeat rule.
+- **Affected epics/tasks**: E05 (`entities.ts`'s `addAssignment`), already
+  `done`; a retrofit, not a reopening of its checkpoint.
+
 *(entries above are the most recent)*

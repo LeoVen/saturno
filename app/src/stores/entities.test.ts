@@ -661,8 +661,10 @@ describe('entities store — Assignments (FR-8/9/10/12)', () => {
       subjectId,
       teacherIds: [],
       weeklyOccurrences: 1,
-      consecutivePeriods: 1,
-      allowSameDayRepetition: false,
+      // D-32: double periods with same-day repetition allowed are the
+      // common case in real usage, so that's the default, not 1/false.
+      consecutivePeriods: 2,
+      allowSameDayRepetition: true,
     })
 
     expect(store.addAssignment(classId, subjectId)).toBeUndefined()
@@ -706,9 +708,10 @@ describe('entities store — Assignments (FR-8/9/10/12)', () => {
     const subjectId = store.addSubject('Matemática')
     const id = store.addAssignment(classId, subjectId) as string
 
-    expect(store.assignmentById(id)?.allowSameDayRepetition).toBe(false)
-    store.setAllowSameDayRepetition(id, true)
+    // D-32: allowed by default now — the override lets a school turn it off.
     expect(store.assignmentById(id)?.allowSameDayRepetition).toBe(true)
+    store.setAllowSameDayRepetition(id, false)
+    expect(store.assignmentById(id)?.allowSameDayRepetition).toBe(false)
   })
 
   it('adds and removes Teachers from an Assignment, rejecting duplicates and unknown Teachers', () => {

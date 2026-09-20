@@ -112,3 +112,5 @@ generation is ever attempted.
   a per-Class weekly-load summary — see [D-27](../DECISIONS.md).
 - **Retrofit** (2026-09-20): the Turma pickers now follow Segment/Grade/
   Class order instead of an alphabetical relabeling — see [D-28](../DECISIONS.md).
+- **Retrofit** (2026-09-20): a new Assignment now defaults to a double
+  period with same-day repetition allowed — see [D-32](../DECISIONS.md).

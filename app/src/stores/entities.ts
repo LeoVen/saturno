@@ -485,14 +485,17 @@ export const useEntitiesStore = defineStore('entities', {
     addAssignment(classId: string, subjectId: string): string | undefined {
       if (!this.classById(classId) || !this.subjectById(subjectId)) return undefined
       if (this.assignmentByClassSubject(classId, subjectId)) return undefined
+      // D-32: consecutivePeriods:2/allowSameDayRepetition:true are the
+      // defaults (not 1/false) — real usage shows double periods with
+      // same-day repetition allowed is the common case, not the exception.
       const assignment: Assignment = {
         id: crypto.randomUUID(),
         classId,
         subjectId,
         teacherIds: [],
         weeklyOccurrences: 1,
-        consecutivePeriods: 1,
-        allowSameDayRepetition: false,
+        consecutivePeriods: 2,
+        allowSameDayRepetition: true,
       }
       this.assignments.push(assignment)
       return assignment.id
