@@ -1,1 +1,26 @@
 .claude
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Rust / wasm-pack
+target/
+pkg/
+wasm-pack.log
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.local
+.env.*.local

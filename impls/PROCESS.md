@@ -136,6 +136,12 @@ told you to read PRD/FR/TR together.
 
 ## 7. Session workflow
 
+**Git workflow (confirmed with the user, 2026-09-20)**: commit directly to
+`main` as tasks complete — no feature-branch-per-epic, no PR review step.
+Every push to `main` triggers CI (lint + tests, then deploy on green per
+E01-T8). This means CI failing on `main` is a real, visible break — don't
+push work you haven't at least run tests/lint on locally first.
+
 **Starting a session:**
 1. Read `impls/PROCESS.md` (this file) if it's been a while.
 2. Read `impls/BOARD.md` to see what epic is active.
