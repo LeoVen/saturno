@@ -1,6 +1,6 @@
 # E06 — Solver Core: Quick Generation
 
-**Status**: in-review
+**Status**: done
 
 ## Goal
 
@@ -39,13 +39,13 @@ does the thing it exists to do.
 
 | ID | Task | Status |
 |---|---|---|
-| E06-T1 | Implement `verify(input, schedule) -> Vec<Violation>` in Rust covering every FR-14 hard constraint (double-booking check uses D-01's real-time comparison) | in-review |
-| E06-T2 | Implement the Constructor: greedy/backtracking constructive search producing one feasible Schedule (IMPL.md §5.1) | in-review |
-| E06-T3 | Expose `generate`'s quick-mode path via WASM, called from a single Web Worker (TR-3) | in-review |
-| E06-T4 | Infeasibility reporting: surface the Constructor's deepest dead-end as a specific, readable pt-BR message (FR-16) | in-review |
-| E06-T5 | Wire E05's FR-13 validation checks as a pre-generation gate on the "Generate" action | in-review |
-| E06-T6 | Unit tests for hard-constraint correctness (e.g. "no output ever double-books a teacher, including across Segments") (TR-11) | in-review |
-| E06-T7 | Verify performance against TR-10's target scale | in-review |
+| E06-T1 | Implement `verify(input, schedule) -> Vec<Violation>` in Rust covering every FR-14 hard constraint (double-booking check uses D-01's real-time comparison) | done |
+| E06-T2 | Implement the Constructor: greedy/backtracking constructive search producing one feasible Schedule (IMPL.md §5.1) | done |
+| E06-T3 | Expose `generate`'s quick-mode path via WASM, called from a single Web Worker (TR-3) | done |
+| E06-T4 | Infeasibility reporting: surface the Constructor's deepest dead-end as a specific, readable pt-BR message (FR-16) | done |
+| E06-T5 | Wire E05's FR-13 validation checks as a pre-generation gate on the "Generate" action | done |
+| E06-T6 | Unit tests for hard-constraint correctness (e.g. "no output ever double-books a teacher, including across Segments") (TR-11) | done |
+| E06-T7 | Verify performance against TR-10's target scale | done |
 
 ## Decisions
 
@@ -77,6 +77,11 @@ does the thing it exists to do.
   single daily slot — a case FR-13's structural pre-checks can't catch)
   produced the specific pt-BR message "Ana: nenhum horário disponível
   compatível com a turma ... 6º Ano B para a disciplina Matemática." No
-  console errors either run. This is agent-driven verification, not the
-  human verification steps above — those still need to be walked by a
-  person before this epic can move to `done`.
+  console errors either run.
+- Human verification confirmed on the deployed app (saturno.leoven.dev):
+  the user generated a real schedule from their own configured school and
+  confirmed it looked correct. Along the way, a reported "only the first
+  grade's classes show in Atribuições" issue turned out to be missing data
+  (classes had only been added under one of four Grades), not a code bug —
+  confirmed by reproducing an equivalent multi-grade setup locally with no
+  issue.
