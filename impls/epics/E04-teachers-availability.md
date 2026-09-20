@@ -1,6 +1,6 @@
 # E04 — Teachers & Availability
 
-**Status**: in-review
+**Status**: done
 
 ## Goal
 
@@ -31,7 +31,7 @@ distinct entities — and define each Teacher's recurring weekly availability.
 | E04-T2 | Weekly Availability model: day × time-range grid, stored independent of any Segment's period structure per D-01 (FR-3) | done |
 | E04-T3 | Config UI: Teacher list | done |
 | E04-T4 | Config UI: availability grid editor for one Teacher | done |
-| E04-T5 | Wire persistence for Teacher/Availability (TR-5) | in-review |
+| E04-T5 | Wire persistence for Teacher/Availability (TR-5) | done |
 
 ## Decisions
 
@@ -77,3 +77,5 @@ distinct entities — and define each Teacher's recurring weekly availability.
   Verification list, but run by the agent, not an actual human — per
   `PROCESS.md` §4/§6, E04-T5 and the epic itself stay `in-review` until a
   human walks through the steps above and flips them to `done`.
+- **Human verification confirmed** (2026-09-20): user reviewed and signed
+  off ("looks good"). E04-T5 and the epic moved to `done`.
