@@ -193,4 +193,107 @@ Template for a new entry:
 
 ---
 
+## D-18 — Consecutive-period blocks: floor division, remainder placed independently
+
+- **Date**: 2026-09-20
+- **Type**: Clarification
+- **Spec refs**: FR-8, FR-10, FR-14
+- **What changes**: an Assignment's `weeklyOccurrences` decomposes into
+  placement blocks of `consecutivePeriods` size by floor division —
+  `weeklyOccurrences / consecutivePeriods` full blocks, plus one smaller
+  block for any remainder (e.g. 5 weekly occurrences at `consecutivePeriods:
+  2` -> two double-period blocks + one single period). `verify`'s
+  `ConsecutiveBlockBroken` check uses the same arithmetic: it requires at
+  least that many maximal same-day contiguous runs of length >=
+  `consecutivePeriods` among the actual placements.
+- **Why**: FR-8/FR-10 don't pin down what happens when `weeklyOccurrences`
+  isn't a clean multiple of the block size — needed a concrete, testable
+  rule for both the Constructor and `verify` to share.
+- **Affected epics/tasks**: E06-T1, E06-T2.
+
+## D-19 — `generateQuick` is a distinct WASM export from the eventual `generate(input, timeBudgetMs)`
+
+- **Date**: 2026-09-20
+- **Type**: Implementation-only
+- **Spec refs**: IMPL.md §4.3, §5.5
+- **What changes**: E06 exposes `generateQuick(input) -> GenerateResult`
+  (Constructor only, no time budget) rather than IMPL.md §4.3's
+  `generate(input, timeBudgetMs)`. The Refiner/Scorer that turn this into a
+  time-boxed, ranked multi-candidate search (deep mode, FR-32-34) are E13's
+  job; `generateQuick` is what E06-T3 means by "expose `generate`'s
+  quick-mode path."
+- **Why**: avoids committing to the final chunked/streaming `generate` call
+  shape (progress messages, cancellation) before E13 actually needs it —
+  quick mode has none of that, so a separate, simpler export is more honest
+  than a `generate` that ignores its own `timeBudgetMs` parameter.
+- **Affected epics/tasks**: E06-T3; E13 will need to decide whether
+  `generateQuick` stays as a thin wrapper around the eventual `generate` or
+  is retired in its favor.
+
+## D-20 — Constructor backtracking is bounded by a fixed step budget
+
+- **Date**: 2026-09-20
+- **Type**: Clarification
+- **Spec refs**: FR-16, IMPL.md §5.1, TR-10
+- **What changes**: the Constructor's backtracking search stops after a
+  fixed number of commit/backtrack steps (`SEARCH_BUDGET`,
+  `solver/src/constructor.rs`) rather than exhausting the full search tree.
+  FR-16's infeasibility report is built from the single deepest dead-end
+  reached within that budget — for a genuinely infeasible school this is
+  the same dead-end a full search would find (task ordering makes early
+  dead-ends the ones that matter in practice), but for a pathologically
+  hard-but-feasible school the budget could in principle be exhausted
+  before a solution is found, misreporting it as infeasible.
+- **Why**: IMPL.md §5.1 itself already frames this as "within a bounded
+  backtracking effort" — an unbounded search has no guarantee of finishing
+  within TR-10's few-seconds target. Verified empirically (E06-T7) that the
+  budget comfortably solves TR-10's target scale in well under a second.
+- **Affected epics/tasks**: E06-T2, E06-T4, E06-T7.
+
+## D-21 — FR-11's `minConsecutivePeriods` is best-effort during construction
+
+- **Date**: 2026-09-20
+- **Type**: Implementation-only
+- **Spec refs**: FR-11, FR-14
+- **What changes**: the Constructor prunes candidate placements against a
+  Teacher's `maxPeriodsPerDay` and `maxConsecutivePeriods` (rejecting a
+  placement that would violate either), but does not prune against
+  `minConsecutivePeriods` — a generated schedule can end up with an
+  isolated single period for a Teacher who has a minimum-block-size limit
+  configured. `verify` still checks `minConsecutivePeriods` and reports a
+  `TeacherConsecutiveLimitViolated` violation if so, so the gap is visible
+  (and matters for FR-18 conflict flags once manual editing exists), just
+  not guaranteed to be avoided by generation itself.
+- **Why**: enforcing a minimum block size during a single greedy forward
+  pass would require holding placements open pending a *later* task filling
+  in the rest of the minimum block — meaningfully more solver complexity
+  for a limit expected to be rare in practice (E06's scope is quick-mode
+  feasibility; true optimization against soft/rare constraints is more in
+  the spirit of E13's Refiner).
+- **Affected epics/tasks**: E06-T2, E06-T6.
+
+## D-22 — Two distinct notions of "consecutive periods"
+
+- **Date**: 2026-09-20
+- **Type**: Clarification
+- **Spec refs**: FR-10, FR-11, FR-14, D-01
+- **What changes**: the solver uses two different adjacency definitions,
+  both called "consecutive" in the spec but answering different questions:
+  (1) **Time-Slot-index adjacency** — two placements are consecutive if
+  they occupy adjacent positions in a Class's Segment's ordered Time Slot
+  list (D-02), even if a Break sits between them in real clock time. This
+  is what FR-10's double/triple-period blocks and the 3-period ceiling
+  check. (2) **Real clock-time back-to-back adjacency** (zero gap between
+  one period's end and the next's start) — this is what a Teacher's own
+  FR-11 `min`/`maxConsecutivePeriods` limits check, consistent with D-01's
+  real-time (not slot-index) modeling of a Teacher's day, since a Teacher
+  can cross Segments with different period grids.
+- **Why**: FR-10's "consecutive periods" is about a Class's own period
+  sequence (a school's notion of "next period," Break or not), while FR-11's
+  is about a Teacher's actual working-time contiguity across possibly
+  different Segments — conflating the two would either break FR-10's
+  intent (a "double period" split by a Break wouldn't count) or D-01's
+  cross-Segment modeling for Teachers.
+- **Affected epics/tasks**: E06-T1, E06-T2.
+
 *(entries above are the most recent)*

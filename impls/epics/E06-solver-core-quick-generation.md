@@ -1,6 +1,6 @@
 # E06 — Solver Core: Quick Generation
 
-**Status**: new
+**Status**: in-review
 
 ## Goal
 
@@ -39,19 +39,44 @@ does the thing it exists to do.
 
 | ID | Task | Status |
 |---|---|---|
-| E06-T1 | Implement `verify(input, schedule) -> Vec<Violation>` in Rust covering every FR-14 hard constraint (double-booking check uses D-01's real-time comparison) | new |
-| E06-T2 | Implement the Constructor: greedy/backtracking constructive search producing one feasible Schedule (IMPL.md §5.1) | new |
-| E06-T3 | Expose `generate`'s quick-mode path via WASM, called from a single Web Worker (TR-3) | new |
-| E06-T4 | Infeasibility reporting: surface the Constructor's deepest dead-end as a specific, readable pt-BR message (FR-16) | new |
-| E06-T5 | Wire E05's FR-13 validation checks as a pre-generation gate on the "Generate" action | new |
-| E06-T6 | Unit tests for hard-constraint correctness (e.g. "no output ever double-books a teacher, including across Segments") (TR-11) | new |
-| E06-T7 | Verify performance against TR-10's target scale | new |
+| E06-T1 | Implement `verify(input, schedule) -> Vec<Violation>` in Rust covering every FR-14 hard constraint (double-booking check uses D-01's real-time comparison) | in-review |
+| E06-T2 | Implement the Constructor: greedy/backtracking constructive search producing one feasible Schedule (IMPL.md §5.1) | in-review |
+| E06-T3 | Expose `generate`'s quick-mode path via WASM, called from a single Web Worker (TR-3) | in-review |
+| E06-T4 | Infeasibility reporting: surface the Constructor's deepest dead-end as a specific, readable pt-BR message (FR-16) | in-review |
+| E06-T5 | Wire E05's FR-13 validation checks as a pre-generation gate on the "Generate" action | in-review |
+| E06-T6 | Unit tests for hard-constraint correctness (e.g. "no output ever double-books a teacher, including across Segments") (TR-11) | in-review |
+| E06-T7 | Verify performance against TR-10's target scale | in-review |
 
 ## Decisions
 
 - See [D-01](../DECISIONS.md) — the double-booking check in `verify` compares
   real clock-time overlaps, not per-Segment slot indices.
+- See [D-18](../DECISIONS.md) — an Assignment's weekly occurrences decompose
+  into consecutive-period blocks by floor division; remainder periods place
+  independently.
+- See [D-19](../DECISIONS.md) — E06 exports a distinct `generateQuick` WASM
+  function rather than IMPL.md §4.3's eventual `generate(input, timeBudgetMs)`.
+- See [D-20](../DECISIONS.md) — the Constructor's backtracking effort is
+  bounded by a fixed step budget; FR-16's report is the deepest dead-end
+  reached within that budget, not a guarantee of true infeasibility.
+- See [D-21](../DECISIONS.md) — FR-11's `minConsecutivePeriods` is checked by
+  `verify` but not strictly enforced during construction (best-effort).
+- See [D-22](../DECISIONS.md) — two distinct "consecutive" definitions are in
+  play: Time-Slot-index adjacency (FR-10 blocks, the 3-period ceiling) vs.
+  real clock-time back-to-back adjacency (a Teacher's own FR-11 limits,
+  D-01's double-booking).
 
 ## Notes
 
-*(none)*
+- Manually exercised end-to-end in a real browser (Vite dev server + a
+  headless Chromium driven via Playwright, entities store seeded directly
+  into IndexedDB to skip re-entering a full E02-E05 config by hand): a
+  feasible 2-class/2-teacher school generated correctly in ~116ms with the
+  expected placements shown in the per-Class grid; a deliberately
+  misconfigured school (one Teacher required by two Classes at the same
+  single daily slot — a case FR-13's structural pre-checks can't catch)
+  produced the specific pt-BR message "Ana: nenhum horário disponível
+  compatível com a turma ... 6º Ano B para a disciplina Matemática." No
+  console errors either run. This is agent-driven verification, not the
+  human verification steps above — those still need to be walked by a
+  person before this epic can move to `done`.
