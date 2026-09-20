@@ -89,3 +89,5 @@ distinct entities — and define each Teacher's recurring weekly availability.
 - **Retrofit** (2026-09-20): a one-off "Ordenar por nome (A-Z)" bulk sort
   was added alongside the manual reorder buttons — see
   [D-30](../DECISIONS.md).
+- **Retrofit** (2026-09-20): each weekday column got a "Bloquear dia"/
+  "Liberar dia" toggle button — see [D-31](../DECISIONS.md).

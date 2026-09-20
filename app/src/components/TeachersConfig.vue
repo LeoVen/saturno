@@ -99,6 +99,22 @@ function toggleCell(weekday: Weekday, rowKey: string): void {
     !isUnavailable(weekday, rowKey),
   )
 }
+
+// "Marcar/desmarcar o dia inteiro": one click to block every period of a
+// weekday within one Segment's grid, instead of clicking each cell — and
+// one click to undo, restoring every period back to available.
+function isDayFullyUnavailable(rows: WeekGridRow[], weekday: Weekday): boolean {
+  return rows.length > 0 && rows.every((row) => isUnavailable(weekday, row.key))
+}
+
+function toggleDay(rows: WeekGridRow[], weekday: Weekday): void {
+  if (!selectedTeacher.value) return
+  const markUnavailable = !isDayFullyUnavailable(rows, weekday)
+  for (const row of rows) {
+    const { start, end } = periodFromRowKey(row.key)
+    store.setAvailability(selectedTeacher.value.id, weekday, start, end, markUnavailable)
+  }
+}
 </script>
 
 <template>
@@ -232,6 +248,23 @@ function toggleCell(weekday: Weekday, rowKey: string): void {
     >
       <h5 v-if="group.segmentName">{{ group.segmentName }}</h5>
       <WeekGrid :columns="columns" :rows="group.rows">
+        <template #col-header="{ column }">
+          <div class="day-header">
+            <span>{{ column.label }}</span>
+            <button
+              type="button"
+              class="btn btn-sm day-toggle"
+              :aria-label="`Marcar/desmarcar ${column.label} inteira (${group.segmentName ?? ''})`"
+              @click="toggleDay(group.rows, column.key as Weekday)"
+            >
+              {{
+                isDayFullyUnavailable(group.rows, column.key as Weekday)
+                  ? 'Liberar dia'
+                  : 'Bloquear dia'
+              }}
+            </button>
+          </div>
+        </template>
         <template #cell="{ column, row }">
           <button
             type="button"
@@ -263,6 +296,18 @@ function toggleCell(weekday: Weekday, rowKey: string): void {
 .availability-group h5 {
   margin: 0 0 var(--space-2);
   color: var(--color-text-muted);
+}
+
+.day-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.day-toggle {
+  font-weight: 400;
+  white-space: nowrap;
 }
 
 .avail-cell {

@@ -465,4 +465,26 @@ Template for a new entry:
 - **Affected epics/tasks**: E04 (`TeachersConfig.vue`), already `done`; a
   retrofit, not a reopening of its checkpoint.
 
+## D-31 — Teacher Availability grid: per-day, per-Segment toggle button
+
+- **Date**: 2026-09-20
+- **Type**: Implementation-only
+- **Spec refs**: FR-3
+- **What changes**: each Segment's Availability grid (D-29) gets a
+  "Bloquear dia"/"Liberar dia" button in every weekday column header,
+  toggling every period of that weekday within that Segment's grid in one
+  click, instead of clicking each cell. The button reads "Liberar dia"
+  only when every period of that day is already unavailable, and
+  "Bloquear dia" otherwise (including a partially-blocked day) — clicking
+  it always drives the day fully to the opposite of its current state.
+  `WeekGrid.vue` gains an optional `col-header` scoped slot (falling back
+  to the plain label) to carry this without becoming Teacher-Availability
+  -specific.
+- **Why**: user-requested — marking a Teacher fully unavailable for a
+  whole day (e.g. a fixed day off) previously meant clicking every period
+  cell individually.
+- **Affected epics/tasks**: E04 (`TeachersConfig.vue`), already `done`;
+  `WeekGrid.vue`'s new slot is additive and doesn't change any existing
+  consumer's behavior. A retrofit, not a reopening of E04's checkpoint.
+
 *(entries above are the most recent)*

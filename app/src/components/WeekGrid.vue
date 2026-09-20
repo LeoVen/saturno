@@ -32,7 +32,9 @@ defineProps<{
     }"
   >
     <div class="week-grid-corner"></div>
-    <div v-for="col in columns" :key="col.key" class="week-grid-col-header">{{ col.label }}</div>
+    <div v-for="col in columns" :key="col.key" class="week-grid-col-header">
+      <slot name="col-header" :column="col">{{ col.label }}</slot>
+    </div>
 
     <template v-for="row in rows" :key="row.key">
       <div class="week-grid-row-header">{{ row.label }}</div>
