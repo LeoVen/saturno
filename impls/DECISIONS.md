@@ -86,4 +86,33 @@ Template for a new entry:
 
 ---
 
+## D-07 — Time Slots/Breaks: auto-sorted by start time, no manual reorder UI
+
+- **Date**: 2026-09-20
+- **Type**: Implementation-only
+- **Spec refs**: FR-5
+- **What changes**: FR-5 calls for an "ordered set" of Time Slots per Segment. Rather than a manually reorderable list (drag-and-drop, up/down buttons), the entities store re-sorts a Segment's `timeSlots`/`breaks` arrays by start time on every add/edit — array order *is* chronological order, always. Same treatment for Breaks (also ordered, per FR-5's "multiple breaks per day at different times").
+- **Why**: periods and breaks within a school day are inherently chronological — there's no real scenario where a school wants Time Slot 2 to display before Time Slot 1 despite starting later. Sorting automatically satisfies "ordered" with far less UI complexity than reorder controls, and removes an entire class of user error (an out-of-order period list).
+- **Affected epics/tasks**: E02-T2, E02-T3, E02-T4.
+
+## D-08 — Segment/Time Slot/Break IDs via `crypto.randomUUID()`
+
+- **Date**: 2026-09-20
+- **Type**: Implementation-only
+- **Spec refs**: none.
+- **What changes**: entity IDs are generated with the browser-native `crypto.randomUUID()`, not a `uuid` npm dependency.
+- **Why**: available natively in every supported target browser (and in Node/jsdom for tests) — no reason to add a dependency for something the platform already provides.
+- **Affected epics/tasks**: E02; the same convention should be followed by later entities (E03+) unless a real reason to deviate comes up.
+
+## D-09 — E01's scaffolding UI (WASM ping, persistence smoke-test) removed in E02
+
+- **Date**: 2026-09-20
+- **Type**: Implementation-only
+- **Spec refs**: none.
+- **What changes**: `App.vue`'s throwaway WASM-ping and persistence-smoke-test sections (and the `scaffoldCheck` Pinia store backing the latter) are deleted, replaced by the real Segments configuration UI. The underlying WASM/Worker wiring (`solver.worker.ts`, the `wasm/pkg` build output) is untouched and unused until E06 needs it.
+- **Why**: E01's own notes flagged this UI as "throwaway scaffolding, not a real screen," to be replaced once E02 wrote the first real pt-BR screen — this is that replacement. The entities store + `SegmentsConfig.vue` now demonstrate the same persistence round-trip for a real reason.
+- **Affected epics/tasks**: E02 (all tasks); E01 (retroactively closes the note left in E01's file).
+
+---
+
 *(entries above are the most recent)*

@@ -31,7 +31,7 @@ each one — called out once here instead of repeated 14 times:
 | ID | Title | Status | Checkpoint (human-testable) | File |
 |---|---|---|---|---|
 | E01 | Project Scaffolding & Deployment Pipeline | done | App deploys to GitHub Pages and loads | [epics/E01-scaffolding-deployment.md](epics/E01-scaffolding-deployment.md) |
-| E02 | Segments, Time Slots & Breaks | new | Configure a Segment's periods/breaks, persists | [epics/E02-segments-time-slots-breaks.md](epics/E02-segments-time-slots-breaks.md) |
+| E02 | Segments, Time Slots & Breaks | in-review | Configure a Segment's periods/breaks, persists | [epics/E02-segments-time-slots-breaks.md](epics/E02-segments-time-slots-breaks.md) |
 | E03 | Grades, Classes & Subjects | new | Configure grades/classes/subjects, persists | [epics/E03-grades-classes-subjects.md](epics/E03-grades-classes-subjects.md) |
 | E04 | Teachers & Availability | new | Create teachers, set availability grid, persists | [epics/E04-teachers-availability.md](epics/E04-teachers-availability.md) |
 | E05 | Requirements, Assignments & Validation | new | Weekly loads + teacher assignments configured; bad config warns | [epics/E05-requirements-assignments-validation.md](epics/E05-requirements-assignments-validation.md) |

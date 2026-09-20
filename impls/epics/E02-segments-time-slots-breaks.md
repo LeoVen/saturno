@@ -1,6 +1,6 @@
 # E02 — Segments, Time Slots & Breaks
 
-**Status**: new
+**Status**: in-review
 
 ## Goal
 
@@ -26,11 +26,11 @@ configured against.
 
 | ID | Task | Status |
 |---|---|---|
-| E02-T1 | Segment entity: create/edit/delete (name) | new |
-| E02-T2 | Time Slot entity: per-Segment ordered list, start/end (24h) | new |
-| E02-T3 | Break entity: per-Segment, start/end, supports multiple per day | new |
-| E02-T4 | Config UI: manage one Segment's Time Slots and Breaks together | new |
-| E02-T5 | Wire persistence for Segment/Time Slot/Break (TR-5) | new |
+| E02-T1 | Segment entity: create/edit/delete (name) | done |
+| E02-T2 | Time Slot entity: per-Segment ordered list, start/end (24h) | done |
+| E02-T3 | Break entity: per-Segment, start/end, supports multiple per day | done |
+| E02-T4 | Config UI: manage one Segment's Time Slots and Breaks together | done |
+| E02-T5 | Wire persistence for Segment/Time Slot/Break (TR-5) | in-review |
 
 ## Decisions
 
@@ -39,8 +39,32 @@ configured against.
 - See [D-01](../DECISIONS.md) — Time Slots must expose real, absolute
   start/end clock times (not just a per-Segment period index), since Teacher
   conflict-checking (E06) compares actual time overlaps across Segments.
+- See [D-07](../DECISIONS.md) — Time Slots/Breaks are auto-sorted by start
+  time; no manual reorder UI.
+- See [D-08](../DECISIONS.md) — entity IDs via `crypto.randomUUID()`.
+- See [D-09](../DECISIONS.md) — E01's throwaway scaffolding UI (WASM ping,
+  `scaffoldCheck` store) removed, replaced by this epic's real UI.
 
 ## Notes
 
-*(none further — both open questions originally noted here were resolved;
-see Decisions above.)*
+- Implementation: `app/src/entities/segment.ts` (types), `app/src/entities/time.ts`
+  (pure `isValidRange`/`sortByStart` helpers, unit-tested), `app/src/stores/entities.ts`
+  (the Pinia "entities store" per IMPL.md §7 — Segment/Time Slot/Break CRUD;
+  later epics add Grades/Classes/Subjects/Teachers/etc. to this same store),
+  `app/src/components/SegmentsConfig.vue` (UI, mounted from `App.vue`).
+- Validation is intentionally minimal here: a Time Slot/Break add or edit is
+  rejected if `start >= end`. Cross-entry checks (overlapping periods, a
+  weekly-load feasibility warning, etc.) are FR-13's territory, scoped to E05
+  — not duplicated here.
+- **Verification performed by the agent** (2026-09-20): full unit suite
+  (`npm test`, 15 tests across `entities.test.ts`/`time.test.ts`) passes; `npm run lint`,
+  `npm run format`, and `npm run build` (`vue-tsc -b && vite build`) are all
+  clean. Additionally drove the real app end-to-end with a headless
+  Playwright browser against `npm run dev`: created a Segment, added a Time
+  Slot (08:00–08:50) and a Break (09:30–10:00), reloaded the page, and
+  confirmed both persisted with exact values via IndexedDB — no console
+  errors. This exercises the same steps as the epic's Human Verification
+  list but was not run by an actual human — per `PROCESS.md` §4/§6, E02-T5
+  and the epic itself stay `in-review` until a human walks through the
+  Human Verification steps above (ideally with two Segments, EF/EM, matching
+  the PRD example exactly) and flips them to `done`.
