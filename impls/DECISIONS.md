@@ -155,4 +155,42 @@ Template for a new entry:
 
 ---
 
+## D-14 — "Interlude" epics: cross-cutting UX/quality work outside the E&lt;NN&gt; sequence
+
+- **Date**: 2026-09-20
+- **Type**: Implementation-only
+- **Spec refs**: none — this is about the planning process (PROCESS.md), not the frozen spec.
+- **What changes**: an epic that isn't derived from a specific FR (a navigation/visual/quality rework spanning already-built screens, rather than new functionality) is named `INTERLUDE-N` instead of `E<NN>`, and its file/BOARD.md row is inserted at the point in the sequence where the work actually happens rather than appended after E14. The `E<NN>` numbering stays reserved for FR/TR-traceable epics so existing cross-references (DECISIONS.md entries, commit messages) never need renumbering.
+- **Why**: user explicitly requested an epic to "tackle the UI and UX" before continuing to E06 — this is real, worth tracking the same way as any other epic (a file, tasks, a Human Verification checklist), but forcing it into the FR-traceable `E<NN>` sequence would misrepresent it as spec-derived work and would require renumbering every later epic (E06→E07, etc.) for no real benefit.
+- **Affected epics/tasks**: INTERLUDE-1 (first instance); `impls/BOARD.md`'s table, which now has a non-`E<NN>` row between E05 and E06.
+
+## D-15 — WeekGrid is a visual layer; Teacher Availability's grid rows come from configured Segments' Time Slots
+
+- **Date**: 2026-09-20
+- **Type**: Clarification
+- **Spec refs**: FR-3, FR-5, D-01
+- **What changes**: the new `WeekGrid` component (INTERLUDE-1-T4) is purely a friendlier editor for data that already exists — Segment Time Slots/Breaks (real clock times, D-02's fixed-per-weekday structure) and Teacher UnavailabilityRanges (D-01's arbitrary time ranges, independent of any one Segment). For Teacher Availability specifically, since D-01 deliberately keeps availability un-tied to any single Segment's period grid, the grid's row boundaries are derived at render time from the **union of every configured Segment's Time Slot start/end times** (deduplicated, sorted) — not a new fixed granularity, and not a data-model change. With no Segments configured yet, it falls back to a plain hourly grid (07:00–19:00) so the screen isn't empty before any Segment exists.
+- **Why**: gives a visually real "calendar" without inventing a new time-grid concept that would need its own reconciliation against Time Slots later — the grid always reflects whatever periods the school has actually configured.
+- **Affected epics/tasks**: INTERLUDE-1-T4, T5, T6.
+
+## D-16 — TimeInput: always 24h, 5-minute steps, native `<input type="time">` dropped everywhere
+
+- **Date**: 2026-09-20
+- **Type**: Clarification
+- **Spec refs**: FR-5
+- **What changes**: every time entry point in the app (Time Slots, Breaks, Teacher Availability, and any future one) moves from the native `<input type="time">` to a custom `TimeInput` component: two `<select>`s (hour 00–23, minute 00/05/…/55). Native `<input type="time">` is removed entirely, not just supplemented.
+- **Why**: the native control renders in whatever 12h/24h format the browser/OS locale dictates — confirmed actually happening (AM/PM shown) in E02–E05's own agent-driven verification screenshots, not a hypothetical risk. There is no HTML attribute to force 24h display, so a custom control is the only fix. 5-minute steps because every real time in the PRD's sample sheets (08:40, 08:55, 10:35, 10:50, etc.) already lands on a 5-minute boundary — confirmed acceptable with the user; revisit if a real 1-minute-precision need ever comes up.
+- **Affected epics/tasks**: INTERLUDE-1-T3 (component), T5/T6 (call sites); every future epic doing time entry uses `TimeInput`, not a raw `<input type="time">`.
+
+## D-17 — Same-name Teacher disambiguation: no raw id, a display-only ordinal instead
+
+- **Date**: 2026-09-20
+- **Type**: Clarification
+- **Spec refs**: FR-2
+- **What changes**: the `#xxxx` UUID-fragment badge added in E04 to satisfy FR-2's "distinguishable in a list" is removed. Disambiguation instead relies on (a) selection always happening by clicking the actual row/entry, never by typing a name to match, and (b) a display-only ordinal suffix — e.g. "Guilherme (2)" — computed at render time by counting same-named Teachers in store array order (insertion order, stable across reloads), shown only when 2+ Teachers actually share a name. Nothing is stored or randomly generated for this.
+- **Why**: the id badge was a real implementation-detail leak — a random UUID fragment means nothing to a school administrator. User flagged this directly; FR-2's actual requirement (distinct, distinguishable entities) doesn't require exposing the id at all once selection is click-based.
+- **Affected epics/tasks**: INTERLUDE-1-T7 (`TeachersConfig.vue`, `AssignmentsConfig.vue`'s Teacher labels).
+
+---
+
 *(entries above are the most recent)*
