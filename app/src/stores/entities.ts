@@ -7,7 +7,14 @@ import type { Teacher, UnavailabilityRange } from '../entities/teacher'
 import type { Weekday } from '../entities/weekday'
 import type { Assignment } from '../entities/assignment'
 import { MAX_CONSECUTIVE_PERIODS } from '../entities/assignment'
-import { isValidRange, sortByStart } from '../entities/time'
+import {
+  distinctSortedRanges,
+  hourlyPeriods,
+  isValidRange,
+  sortByStart,
+  subtractRange,
+} from '../entities/time'
+import type { TimeRangeValue } from '../entities/time'
 import { sortByWeekdayThenStart } from '../entities/weekday'
 import {
   allWeeklyPeriods,
@@ -59,6 +66,21 @@ export const useEntitiesStore = defineStore('entities', {
     teacherById: (state) => {
       return (id: string): Teacher | undefined => state.teachers.find((t) => t.id === id)
     },
+    /**
+     * D-17: a same-name Teacher is disambiguated with a display-only
+     * ordinal ("Guilherme (2)") computed at render time from store array
+     * order — never a raw id shown to the user.
+     */
+    teacherLabel() {
+      return (id: string): string => {
+        const teacher = this.teacherById(id)
+        if (!teacher) return '?'
+        const sameName = this.teachers.filter((t) => t.name === teacher.name)
+        if (sameName.length <= 1) return teacher.name
+        const index = sameName.findIndex((t) => t.id === id)
+        return `${teacher.name} (${index + 1})`
+      }
+    },
     assignmentById: (state) => {
       return (id: string): Assignment | undefined => state.assignments.find((a) => a.id === id)
     },
@@ -69,6 +91,16 @@ export const useEntitiesStore = defineStore('entities', {
     assignmentByClassSubject: (state) => {
       return (classId: string, subjectId: string): Assignment | undefined =>
         state.assignments.find((a) => a.classId === classId && a.subjectId === subjectId)
+    },
+    /**
+     * D-15: the WeekGrid's row boundaries for Teacher Availability — every
+     * Time Slot configured across every Segment, merged and de-duplicated,
+     * since availability isn't tied to any one Segment's period grid
+     * (D-01). Falls back to a plain hourly grid when no Segment exists yet.
+     */
+    availabilityGridPeriods(): TimeRangeValue[] {
+      const merged = distinctSortedRanges(this.segments.flatMap((s) => s.timeSlots))
+      return merged.length > 0 ? merged : hourlyPeriods(7, 19)
     },
     /** Every Time Slot (across all 5 weekdays) the given Class is schedulable during, via its Grade's Segment. */
     classWeeklyPeriods() {
@@ -287,6 +319,40 @@ export const useEntitiesStore = defineStore('entities', {
       const teacher = this.teacherById(teacherId)
       if (!teacher) return
       teacher.unavailability = teacher.unavailability.filter((r) => r.id !== rangeId)
+    },
+
+    /**
+     * WeekGrid's click-to-toggle for one (weekday, period) cell. Marking
+     * available again correctly trims/splits whatever existing range(s)
+     * cover the cell — not just a same-shape range added earlier by the
+     * grid itself — so it behaves correctly even against ranges entered
+     * before this UI existed.
+     */
+    setAvailability(
+      teacherId: string,
+      weekday: Weekday,
+      start: string,
+      end: string,
+      unavailable: boolean,
+    ): boolean {
+      const teacher = this.teacherById(teacherId)
+      if (!teacher || !isValidRange(start, end)) return false
+      if (unavailable) {
+        this.addUnavailability(teacherId, weekday, start, end)
+        return true
+      }
+      const remaining: UnavailabilityRange[] = []
+      for (const range of teacher.unavailability) {
+        if (range.weekday !== weekday) {
+          remaining.push(range)
+          continue
+        }
+        for (const piece of subtractRange(range, { start, end })) {
+          remaining.push({ ...piece, id: crypto.randomUUID() })
+        }
+      }
+      teacher.unavailability = sortByWeekdayThenStart(remaining)
+      return true
     },
 
     /** FR-11. Each limit is optional — pass `undefined` to clear it. Replaces all three at once. */

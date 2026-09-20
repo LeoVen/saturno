@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useEntitiesStore } from '../stores/entities'
 import { WEEKDAYS, type Weekday } from '../entities/weekday'
+import WeekGrid, { type WeekGridColumn, type WeekGridRow } from './WeekGrid.vue'
 
 const WEEKDAY_LABELS: Record<Weekday, string> = {
   mon: 'Segunda',
@@ -14,17 +15,11 @@ const WEEKDAY_LABELS: Record<Weekday, string> = {
 const store = useEntitiesStore()
 
 const newTeacherName = ref('')
-const selectedTeacherId = ref<string | null>(null)
+const selectedTeacherId = ref('')
 
 const selectedTeacher = computed(() =>
   selectedTeacherId.value ? store.teacherById(selectedTeacherId.value) : undefined,
 )
-
-// A short, stable suffix so same-name Teachers are visibly distinct in the
-// list (FR-2) without exposing the full UUID.
-function shortId(id: string): string {
-  return id.slice(0, 4)
-}
 
 function createTeacher(): void {
   const name = newTeacherName.value.trim()
@@ -39,59 +34,7 @@ function renameTeacher(id: string, event: Event): void {
 
 function deleteTeacher(id: string): void {
   store.removeTeacher(id)
-  if (selectedTeacherId.value === id) selectedTeacherId.value = null
-}
-
-// Draft state for each weekday's "add unavailability" mini-form.
-const draftStart = reactive<Record<Weekday, string>>({
-  mon: '',
-  tue: '',
-  wed: '',
-  thu: '',
-  fri: '',
-})
-const draftEnd = reactive<Record<Weekday, string>>({
-  mon: '',
-  tue: '',
-  wed: '',
-  thu: '',
-  fri: '',
-})
-const dayError = reactive<Record<Weekday, string>>({ mon: '', tue: '', wed: '', thu: '', fri: '' })
-
-function rangesForDay(weekday: Weekday) {
-  return (selectedTeacher.value?.unavailability ?? []).filter((r) => r.weekday === weekday)
-}
-
-function addUnavailability(weekday: Weekday): void {
-  if (!selectedTeacher.value) return
-  const id = store.addUnavailability(
-    selectedTeacher.value.id,
-    weekday,
-    draftStart[weekday],
-    draftEnd[weekday],
-  )
-  if (id === undefined) {
-    dayError[weekday] = 'Horário inválido: o início deve ser antes do término.'
-    return
-  }
-  dayError[weekday] = ''
-  draftStart[weekday] = ''
-  draftEnd[weekday] = ''
-}
-
-function editUnavailability(
-  rangeId: string,
-  weekday: Weekday,
-  field: 'start' | 'end',
-  value: string,
-): void {
-  if (!selectedTeacher.value) return
-  const range = selectedTeacher.value.unavailability.find((r) => r.id === rangeId)
-  if (!range) return
-  const start = field === 'start' ? value : range.start
-  const end = field === 'end' ? value : range.end
-  store.updateUnavailability(selectedTeacher.value.id, rangeId, weekday, start, end)
+  if (selectedTeacherId.value === id) selectedTeacherId.value = ''
 }
 
 // FR-11: per-Teacher optional daily/consecutive-period limits.
@@ -112,233 +55,160 @@ function onLimitChange(field: LimitField, event: Event): void {
     ? ''
     : 'Valor inválido: use um número inteiro positivo, com mínimo ≤ máximo.'
 }
+
+// Availability grid (D-15): columns are the 5 weekdays, rows are every
+// configured Segment's Time Slots merged (or a default hourly grid if none
+// exist yet) — a real visual weekly grid, click-to-toggle per cell.
+const columns: WeekGridColumn[] = WEEKDAYS.map((day) => ({ key: day, label: WEEKDAY_LABELS[day] }))
+
+const rows = computed<WeekGridRow[]>(() =>
+  store.availabilityGridPeriods.map((p) => ({
+    key: `${p.start}-${p.end}`,
+    label: `${p.start}–${p.end}`,
+  })),
+)
+
+function periodFromRowKey(key: string): { start: string; end: string } {
+  const [start, end] = key.split('-')
+  return { start: start ?? '', end: end ?? '' }
+}
+
+function isUnavailable(weekday: Weekday, rowKey: string): boolean {
+  if (!selectedTeacher.value) return false
+  const { start, end } = periodFromRowKey(rowKey)
+  return selectedTeacher.value.unavailability.some(
+    (r) => r.weekday === weekday && r.start <= start && end <= r.end,
+  )
+}
+
+function toggleCell(weekday: Weekday, rowKey: string): void {
+  if (!selectedTeacher.value) return
+  const { start, end } = periodFromRowKey(rowKey)
+  store.setAvailability(
+    selectedTeacher.value.id,
+    weekday,
+    start,
+    end,
+    !isUnavailable(weekday, rowKey),
+  )
+}
 </script>
 
 <template>
-  <section>
-    <h2>Professores</h2>
+  <h2>Professores</h2>
 
-    <ul class="teacher-list">
+  <div class="card">
+    <ul class="pill-list">
       <li v-for="teacher in store.teachers" :key="teacher.id">
         <button
           type="button"
-          class="teacher-name"
+          class="pill"
           :class="{ selected: teacher.id === selectedTeacherId }"
           @click="selectedTeacherId = teacher.id"
         >
-          {{ teacher.name }} <span class="teacher-id">#{{ shortId(teacher.id) }}</span>
+          {{ store.teacherLabel(teacher.id) }}
         </button>
-        <button type="button" @click="deleteTeacher(teacher.id)">Excluir</button>
+        <button type="button" class="btn btn-danger btn-sm" @click="deleteTeacher(teacher.id)">
+          Excluir
+        </button>
       </li>
     </ul>
+    <p v-if="!store.teachers.length" class="empty">Nenhum professor cadastrado.</p>
 
-    <form @submit.prevent="createTeacher">
-      <label>
-        Novo professor
-        <input v-model="newTeacherName" type="text" placeholder="ex.: Guilherme" />
+    <form class="row" @submit.prevent="createTeacher">
+      <label class="field">
+        <span class="field-label">Novo professor</span>
+        <input v-model="newTeacherName" class="input" type="text" placeholder="ex.: Guilherme" />
       </label>
-      <button type="submit">Adicionar Professor</button>
+      <button type="submit" class="btn btn-primary">Adicionar Professor</button>
     </form>
-  </section>
+  </div>
 
-  <section v-if="selectedTeacher">
-    <h3>
-      Disponibilidade semanal de "{{ selectedTeacher.name }}"
-      <span class="teacher-id">#{{ shortId(selectedTeacher.id) }}</span>
-    </h3>
-    <p>
-      Renomear:
+  <div v-if="selectedTeacher" class="card">
+    <h3>Disponibilidade semanal de "{{ store.teacherLabel(selectedTeacher.id) }}"</h3>
+    <label class="field field-inline" style="margin-bottom: var(--space-4)">
+      <span class="field-label">Renomear</span>
       <input
+        class="input"
         type="text"
         :value="selectedTeacher.name"
         @change="renameTeacher(selectedTeacher.id, $event)"
       />
-    </p>
-    <p class="hint">
-      Por padrão, o professor está disponível em todos os horários. Cadastre abaixo os períodos em
-      que ele fica indisponível (ex.: apenas terça à tarde).
-    </p>
+    </label>
 
-    <div>
-      <h4>Limites do professor</h4>
-      <div class="limits">
-        <label>
-          Máx. de aulas por dia
-          <input
-            type="number"
-            min="1"
-            :value="selectedTeacher.maxPeriodsPerDay ?? ''"
-            @change="onLimitChange('maxPeriodsPerDay', $event)"
-          />
-        </label>
-        <label>
-          Mín. de aulas consecutivas
-          <input
-            type="number"
-            min="1"
-            :value="selectedTeacher.minConsecutivePeriods ?? ''"
-            @change="onLimitChange('minConsecutivePeriods', $event)"
-          />
-        </label>
-        <label>
-          Máx. de aulas consecutivas
-          <input
-            type="number"
-            min="1"
-            :value="selectedTeacher.maxConsecutivePeriods ?? ''"
-            @change="onLimitChange('maxConsecutivePeriods', $event)"
-          />
-        </label>
-      </div>
-      <p v-if="limitsError" role="alert">{{ limitsError }}</p>
+    <h4>Limites do professor</h4>
+    <div class="row">
+      <label class="field">
+        <span class="field-label">Máx. de aulas por dia</span>
+        <input
+          class="input input-sm"
+          type="number"
+          min="1"
+          :value="selectedTeacher.maxPeriodsPerDay ?? ''"
+          @change="onLimitChange('maxPeriodsPerDay', $event)"
+        />
+      </label>
+      <label class="field">
+        <span class="field-label">Mín. de aulas consecutivas</span>
+        <input
+          class="input input-sm"
+          type="number"
+          min="1"
+          :value="selectedTeacher.minConsecutivePeriods ?? ''"
+          @change="onLimitChange('minConsecutivePeriods', $event)"
+        />
+      </label>
+      <label class="field">
+        <span class="field-label">Máx. de aulas consecutivas</span>
+        <input
+          class="input input-sm"
+          type="number"
+          min="1"
+          :value="selectedTeacher.maxConsecutivePeriods ?? ''"
+          @change="onLimitChange('maxConsecutivePeriods', $event)"
+        />
+      </label>
     </div>
+    <p v-if="limitsError" class="alert alert-danger" role="alert">{{ limitsError }}</p>
 
-    <div class="day-grid">
-      <div v-for="day in WEEKDAYS" :key="day" class="day-column">
-        <h4>{{ WEEKDAY_LABELS[day] }}</h4>
+    <h4 style="margin-top: var(--space-4)">Disponibilidade</h4>
+    <p class="muted">
+      Por padrão o professor está disponível em todo horário. Clique em uma célula para marcá-la
+      como indisponível (ex.: apenas terça à tarde) — clique novamente para voltar a disponível.
+    </p>
 
-        <ul v-if="rangesForDay(day).length" class="range-list">
-          <li v-for="range in rangesForDay(day)" :key="range.id">
-            <input
-              type="time"
-              :value="range.start"
-              @change="
-                editUnavailability(
-                  range.id,
-                  day,
-                  'start',
-                  ($event.target as HTMLInputElement).value,
-                )
-              "
-            />
-            <input
-              type="time"
-              :value="range.end"
-              @change="
-                editUnavailability(range.id, day, 'end', ($event.target as HTMLInputElement).value)
-              "
-            />
-            <button
-              type="button"
-              @click="store.removeUnavailability(selectedTeacher!.id, range.id)"
-            >
-              Remover
-            </button>
-          </li>
-        </ul>
-        <p v-else class="none">Disponível o dia todo.</p>
-
-        <form @submit.prevent="addUnavailability(day)">
-          <input v-model="draftStart[day]" type="time" required />
-          <input v-model="draftEnd[day]" type="time" required />
-          <button type="submit">Adicionar</button>
-        </form>
-        <p v-if="dayError[day]" role="alert">{{ dayError[day] }}</p>
-      </div>
-    </div>
-  </section>
+    <WeekGrid :columns="columns" :rows="rows">
+      <template #cell="{ column, row }">
+        <button
+          type="button"
+          class="avail-cell"
+          :class="{ unavailable: isUnavailable(column.key as Weekday, row.key) }"
+          :aria-label="`${column.label} ${row.label}`"
+          @click="toggleCell(column.key as Weekday, row.key)"
+        ></button>
+      </template>
+    </WeekGrid>
+  </div>
 </template>
 
 <style scoped>
-.teacher-list {
-  list-style: none;
+.avail-cell {
+  width: 100%;
+  height: 100%;
+  min-height: 2.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: #eafaf0;
+  cursor: pointer;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
 }
 
-.teacher-list li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.avail-cell:hover {
+  filter: brightness(0.97);
 }
 
-.teacher-name {
-  font: inherit;
-  padding: 4px 8px;
-}
-
-.teacher-name.selected {
-  font-weight: bold;
-}
-
-.teacher-id {
-  color: gray;
-  font-size: 0.85em;
-}
-
-.hint {
-  font-size: 0.9em;
-  color: gray;
-}
-
-.limits {
-  display: flex;
-  align-items: flex-end;
-  gap: 16px;
-  flex-wrap: wrap;
-  margin-bottom: 16px;
-}
-
-.limits input {
-  width: 5em;
-}
-
-.day-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-  gap: 12px;
-}
-
-.day-column {
-  border: 1px solid;
-  padding: 8px;
-  min-width: 0;
-}
-
-.range-list {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 8px 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.range-list li {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-
-.range-list input[type='time'] {
-  min-width: 0;
-  flex: 1 1 6.5em;
-}
-
-.none {
-  font-size: 0.85em;
-  color: gray;
-}
-
-form {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-  margin-bottom: 24px;
-}
-
-.day-column form {
-  margin-bottom: 4px;
-}
-
-label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 0.9em;
+.avail-cell.unavailable {
+  background: var(--color-danger-bg);
+  border-color: var(--color-danger-border);
 }
 </style>

@@ -2,20 +2,26 @@
 import { computed, ref } from 'vue'
 import { useEntitiesStore } from '../stores/entities'
 
-const props = defineProps<{ segmentId: string | null }>()
-
 const store = useEntitiesStore()
 
-const segment = computed(() => (props.segmentId ? store.segmentById(props.segmentId) : undefined))
-const grades = computed(() => (props.segmentId ? store.gradesBySegment(props.segmentId) : []))
+// Owns its own Segment selection — each nav section is self-contained
+// (INTERLUDE-1-T1) rather than depending on whatever was last selected on
+// the Segmentos page.
+const selectedSegmentId = ref('')
+const segment = computed(() =>
+  selectedSegmentId.value ? store.segmentById(selectedSegmentId.value) : undefined,
+)
+const grades = computed(() =>
+  selectedSegmentId.value ? store.gradesBySegment(selectedSegmentId.value) : [],
+)
 
 const newGradeName = ref('')
 
 function createGrade(): void {
-  if (!props.segmentId) return
+  if (!selectedSegmentId.value) return
   const name = newGradeName.value.trim()
   if (!name) return
-  store.addGrade(props.segmentId, name)
+  store.addGrade(selectedSegmentId.value, name)
   newGradeName.value = ''
 }
 
@@ -39,50 +45,81 @@ function renameClass(id: string, event: Event): void {
 </script>
 
 <template>
-  <section v-if="segment">
-    <h3>Séries e turmas de "{{ segment.name }}"</h3>
+  <h2>Séries e Turmas</h2>
+
+  <div class="card">
+    <label class="field">
+      <span class="field-label">Segmento</span>
+      <select v-model="selectedSegmentId" class="input">
+        <option value="" disabled>Selecione…</option>
+        <option v-for="s in store.segments" :key="s.id" :value="s.id">{{ s.name }}</option>
+      </select>
+    </label>
+    <p v-if="!store.segments.length" class="empty">
+      Cadastre um Segmento primeiro, na página "Segmentos".
+    </p>
+  </div>
+
+  <div v-if="segment" class="card">
+    <h3>Séries de "{{ segment.name }}"</h3>
 
     <ul class="grade-list">
       <li v-for="grade in grades" :key="grade.id" class="grade-item">
         <div class="grade-header">
           <input
-            class="grade-name"
+            class="input grade-name"
             type="text"
             :value="grade.name"
             @change="renameGrade(grade.id, $event)"
           />
-          <button type="button" @click="store.removeGrade(grade.id)">Excluir Série</button>
+          <button type="button" class="btn btn-danger btn-sm" @click="store.removeGrade(grade.id)">
+            Excluir Série
+          </button>
         </div>
 
-        <ul class="class-list">
+        <ul class="pill-list class-list">
           <li v-for="schoolClass in store.classesByGrade(grade.id)" :key="schoolClass.id">
             <input
+              class="input"
               type="text"
               :value="schoolClass.name"
               @change="renameClass(schoolClass.id, $event)"
             />
-            <button type="button" @click="store.removeClass(schoolClass.id)">Excluir</button>
+            <button
+              type="button"
+              class="btn btn-danger btn-sm"
+              @click="store.removeClass(schoolClass.id)"
+            >
+              Excluir
+            </button>
           </li>
         </ul>
+        <p v-if="!store.classesByGrade(grade.id).length" class="empty">Nenhuma turma cadastrada.</p>
 
-        <form @submit.prevent="createClass(grade.id)">
-          <label>
-            Nova turma
-            <input v-model="newClassNames[grade.id]" type="text" placeholder="ex.: 7º Ano A" />
+        <form class="row" @submit.prevent="createClass(grade.id)">
+          <label class="field">
+            <span class="field-label">Nova turma</span>
+            <input
+              v-model="newClassNames[grade.id]"
+              class="input"
+              type="text"
+              placeholder="ex.: 7º Ano A"
+            />
           </label>
-          <button type="submit">Adicionar Turma</button>
+          <button type="submit" class="btn">Adicionar Turma</button>
         </form>
       </li>
     </ul>
+    <p v-if="!grades.length" class="empty">Nenhuma série cadastrada.</p>
 
-    <form @submit.prevent="createGrade">
-      <label>
-        Nova série
-        <input v-model="newGradeName" type="text" placeholder="ex.: 7º Ano" />
+    <form class="row" @submit.prevent="createGrade">
+      <label class="field">
+        <span class="field-label">Nova série</span>
+        <input v-model="newGradeName" class="input" type="text" placeholder="ex.: 7º Ano" />
       </label>
-      <button type="submit">Adicionar Série</button>
+      <button type="submit" class="btn btn-primary">Adicionar Série</button>
     </form>
-  </section>
+  </div>
 </template>
 
 <style scoped>
@@ -91,53 +128,28 @@ function renameClass(id: string, event: Event): void {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
+  margin: 0 0 var(--space-4);
 }
 
 .grade-item {
-  border: 1px solid;
-  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
 }
 
 .grade-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
 }
 
 .grade-name {
-  font-weight: bold;
-  font-size: 1.05em;
+  font-weight: 600;
 }
 
 .class-list {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 12px 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.class-list li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-form {
-  display: flex;
-  align-items: flex-end;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 12px;
-}
-
-label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 0.9em;
+  margin-bottom: var(--space-3);
 }
 </style>

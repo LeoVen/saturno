@@ -35,7 +35,7 @@ each one — called out once here instead of repeated 14 times:
 | E03 | Grades, Classes & Subjects | done | Configure grades/classes/subjects, persists | [epics/E03-grades-classes-subjects.md](epics/E03-grades-classes-subjects.md) |
 | E04 | Teachers & Availability | done | Create teachers, set availability grid, persists | [epics/E04-teachers-availability.md](epics/E04-teachers-availability.md) |
 | E05 | Requirements, Assignments & Validation | done | Weekly loads + teacher assignments configured; bad config warns | [epics/E05-requirements-assignments-validation.md](epics/E05-requirements-assignments-validation.md) |
-| INTERLUDE-1 | UI/UX Pass | new | Sidebar nav, 24h time input, calendar-style grids, no implementation-detail leaks | [epics/INTERLUDE-1-ui-ux-pass.md](epics/INTERLUDE-1-ui-ux-pass.md) |
+| INTERLUDE-1 | UI/UX Pass | in-review | Sidebar nav, 24h time input, calendar-style grids, no implementation-detail leaks | [epics/INTERLUDE-1-ui-ux-pass.md](epics/INTERLUDE-1-ui-ux-pass.md) |
 | E06 | Solver Core: Quick Generation | new | Generate click → a valid schedule, or a specific infeasibility reason | [epics/E06-solver-core-quick-generation.md](epics/E06-solver-core-quick-generation.md) |
 | E07 | Schedule Versions | new | Multiple named versions, switch/duplicate | [epics/E07-schedule-versions.md](epics/E07-schedule-versions.md) |
 | E08 | Views: Per-Class & Per-Teacher | new | Browse the saved schedule both ways | [epics/E08-views-per-class-per-teacher.md](epics/E08-views-per-class-per-teacher.md) |

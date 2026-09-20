@@ -16,11 +16,6 @@ function subjectLabel(subjectId: string): string {
   return store.subjectById(subjectId)?.name ?? '?'
 }
 
-function teacherLabel(teacherId: string): string {
-  const teacher = store.teacherById(teacherId)
-  return teacher ? `${teacher.name} #${teacherId.slice(0, 4)}` : '?'
-}
-
 const allClasses = computed(() =>
   [...store.classes]
     .map((c) => ({ id: c.id, label: classLabel(c.id) }))
@@ -61,6 +56,9 @@ function toggleTeacher(assignmentId: string, teacherId: string, event: Event): v
   }
 }
 
+// D-17 precedent: never show a raw value the user didn't choose in a way
+// they'd have to decode — consecutivePeriods is an internal 1/2/3 encoding,
+// always shown through this label.
 const CONSECUTIVE_LABELS: Record<number, string> = {
   1: 'Nenhum (períodos independentes)',
   2: 'Dupla (2 períodos consecutivos)',
@@ -73,87 +71,98 @@ function overloadMessage(classId: string, requiredWeekly: number, availableWeekl
 
 function zeroOverlapMessage(assignmentId: string, teacherId: string, classId: string): string {
   const subjectId = store.assignmentById(assignmentId)?.subjectId
-  return `${teacherLabel(teacherId)}: nenhum horário disponível compatível com ${classLabel(classId)}${subjectId ? ` para a disciplina ${subjectLabel(subjectId)}` : ''}.`
+  return `${store.teacherLabel(teacherId)}: nenhum horário disponível compatível com ${classLabel(classId)}${subjectId ? ` para a disciplina ${subjectLabel(subjectId)}` : ''}.`
 }
 </script>
 
 <template>
-  <section>
-    <h2>Atribuições (Turma × Disciplina)</h2>
+  <h2>Atribuições (Turma × Disciplina)</h2>
 
-    <div class="picker">
-      <label>
-        Turma
-        <select v-model="selectedClassId">
+  <div class="card">
+    <div class="row">
+      <label class="field">
+        <span class="field-label">Turma</span>
+        <select v-model="selectedClassId" class="input">
           <option value="" disabled>Selecione…</option>
           <option v-for="c in allClasses" :key="c.id" :value="c.id">{{ c.label }}</option>
         </select>
       </label>
-      <label>
-        Disciplina
-        <select v-model="selectedSubjectId">
+      <label class="field">
+        <span class="field-label">Disciplina</span>
+        <select v-model="selectedSubjectId" class="input">
           <option value="" disabled>Selecione…</option>
           <option v-for="s in store.subjects" :key="s.id" :value="s.id">{{ s.name }}</option>
         </select>
       </label>
     </div>
 
-    <div v-if="selectedClassId && selectedSubjectId">
-      <button v-if="!currentAssignment" type="button" @click="createAssignment">
+    <div v-if="selectedClassId && selectedSubjectId" style="margin-top: var(--space-4)">
+      <button
+        v-if="!currentAssignment"
+        type="button"
+        class="btn btn-primary"
+        @click="createAssignment"
+      >
         Criar atribuição
       </button>
 
-      <div v-else class="editor">
-        <label>
-          Aulas por semana
+      <div v-else class="editor stack">
+        <label class="field">
+          <span class="field-label">Aulas por semana</span>
           <input
+            class="input input-sm"
             type="number"
             min="1"
             :value="currentAssignment.weeklyOccurrences"
             @change="onWeeklyOccurrencesChange(currentAssignment.id, $event)"
           />
         </label>
-        <label>
-          Períodos consecutivos
+        <label class="field">
+          <span class="field-label">Períodos consecutivos</span>
           <select
+            class="input"
             :value="currentAssignment.consecutivePeriods"
             @change="onConsecutivePeriodsChange(currentAssignment.id, $event)"
           >
             <option v-for="n in [1, 2, 3]" :key="n" :value="n">{{ CONSECUTIVE_LABELS[n] }}</option>
           </select>
         </label>
-        <label class="checkbox">
+        <label class="field field-inline">
           <input
             type="checkbox"
             :checked="currentAssignment.allowSameDayRepetition"
             @change="onAllowSameDayChange(currentAssignment.id, $event)"
           />
-          Permitir repetição no mesmo dia
+          <span>Permitir repetição no mesmo dia</span>
         </label>
 
         <fieldset>
-          <legend>Professores</legend>
-          <label v-for="t in store.teachers" :key="t.id" class="checkbox">
+          <legend class="field-label">Professores</legend>
+          <label v-for="t in store.teachers" :key="t.id" class="field field-inline">
             <input
               type="checkbox"
               :checked="currentAssignment.teacherIds.includes(t.id)"
               @change="toggleTeacher(currentAssignment.id, t.id, $event)"
             />
-            {{ teacherLabel(t.id) }}
+            <span>{{ store.teacherLabel(t.id) }}</span>
           </label>
-          <p v-if="!store.teachers.length" class="hint">Nenhum professor cadastrado.</p>
+          <p v-if="!store.teachers.length" class="empty">Nenhum professor cadastrado.</p>
         </fieldset>
 
-        <button type="button" @click="store.removeAssignment(currentAssignment.id)">
+        <button
+          type="button"
+          class="btn btn-danger btn-sm"
+          @click="store.removeAssignment(currentAssignment.id)"
+        >
           Excluir atribuição
         </button>
       </div>
     </div>
-  </section>
+  </div>
 
-  <section v-if="store.assignments.length">
+  <div v-if="store.assignments.length" class="card">
     <h3>Atribuições cadastradas</h3>
-    <table>
+    <table class="table">
       <thead>
         <tr>
           <th>Turma</th>
@@ -169,81 +178,59 @@ function zeroOverlapMessage(assignmentId: string, teacherId: string, classId: st
           <td>{{ classLabel(a.classId) }}</td>
           <td>{{ subjectLabel(a.subjectId) }}</td>
           <td>{{ a.weeklyOccurrences }}</td>
-          <td>{{ a.consecutivePeriods }}</td>
-          <td>{{ a.teacherIds.map(teacherLabel).join(', ') || '—' }}</td>
-          <td><button type="button" @click="store.removeAssignment(a.id)">Excluir</button></td>
+          <td>{{ CONSECUTIVE_LABELS[a.consecutivePeriods] }}</td>
+          <td>{{ a.teacherIds.map(store.teacherLabel).join(', ') || '—' }}</td>
+          <td>
+            <button
+              type="button"
+              class="btn btn-danger btn-sm"
+              @click="store.removeAssignment(a.id)"
+            >
+              Excluir
+            </button>
+          </td>
         </tr>
       </tbody>
     </table>
-  </section>
+  </div>
 
-  <section v-if="store.overloadedClasses.length || store.zeroOverlapAssignments.length">
+  <div v-if="store.overloadedClasses.length || store.zeroOverlapAssignments.length" class="card">
     <h3>Avisos de validação</h3>
-    <ul class="warnings">
-      <li v-for="w in store.overloadedClasses" :key="w.classId" role="alert">
+    <ul class="alert-list">
+      <li
+        v-for="w in store.overloadedClasses"
+        :key="w.classId"
+        class="alert alert-danger"
+        role="alert"
+      >
         {{ overloadMessage(w.classId, w.requiredWeekly, w.availableWeekly) }}
       </li>
-      <li v-for="w in store.zeroOverlapAssignments" :key="w.assignmentId" role="alert">
+      <li
+        v-for="w in store.zeroOverlapAssignments"
+        :key="w.assignmentId"
+        class="alert alert-danger"
+        role="alert"
+      >
         {{ zeroOverlapMessage(w.assignmentId, w.teacherId, w.classId) }}
       </li>
     </ul>
-  </section>
+  </div>
 </template>
 
 <style scoped>
-.picker {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 12px;
-}
-
 .editor {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: flex-start;
-  border: 1px solid;
-  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
   max-width: 480px;
 }
 
-label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 0.9em;
-}
-
-label.checkbox {
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
-}
-
 fieldset {
+  border: none;
+  padding: 0;
+  margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-}
-
-.hint {
-  font-size: 0.85em;
-  color: gray;
-}
-
-table {
-  border-collapse: collapse;
-  margin-bottom: 12px;
-}
-
-th,
-td {
-  padding: 4px 8px;
-  text-align: left;
-}
-
-.warnings {
-  color: #a33;
+  gap: var(--space-1);
 }
 </style>

@@ -248,6 +248,34 @@ describe('entities store — Teachers', () => {
   })
 })
 
+describe('entities store — teacherLabel (D-17)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('is just the name when it is unique', () => {
+    const store = useEntitiesStore()
+    const id = store.addTeacher('Guilherme')
+    expect(store.teacherLabel(id)).toBe('Guilherme')
+  })
+
+  it('appends a stable ordinal, never a raw id, when names collide', () => {
+    const store = useEntitiesStore()
+    const a = store.addTeacher('Guilherme')
+    const b = store.addTeacher('Guilherme')
+
+    expect(store.teacherLabel(a)).toBe('Guilherme (1)')
+    expect(store.teacherLabel(b)).toBe('Guilherme (2)')
+  })
+
+  it('is unaffected by an unrelated Teacher with a different name', () => {
+    const store = useEntitiesStore()
+    const a = store.addTeacher('Guilherme')
+    store.addTeacher('Fernanda')
+    expect(store.teacherLabel(a)).toBe('Guilherme')
+  })
+})
+
 describe('entities store — Teacher Availability', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -310,6 +338,96 @@ describe('entities store — Teacher Availability', () => {
 
     store.removeUnavailability(teacherId, id)
     expect(store.teacherById(teacherId)?.unavailability).toHaveLength(0)
+  })
+})
+
+describe('entities store — setAvailability (WeekGrid click-to-toggle)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('marking a cell unavailable adds a range', () => {
+    const store = useEntitiesStore()
+    const teacherId = store.addTeacher('Guilherme')
+
+    expect(store.setAvailability(teacherId, 'tue', '08:00', '08:50', true)).toBe(true)
+
+    expect(store.teacherById(teacherId)?.unavailability).toMatchObject([
+      { weekday: 'tue', start: '08:00', end: '08:50' },
+    ])
+  })
+
+  it('marking a cell available removes an exactly-matching range', () => {
+    const store = useEntitiesStore()
+    const teacherId = store.addTeacher('Guilherme')
+    store.setAvailability(teacherId, 'tue', '08:00', '08:50', true)
+
+    store.setAvailability(teacherId, 'tue', '08:00', '08:50', false)
+
+    expect(store.teacherById(teacherId)?.unavailability).toEqual([])
+  })
+
+  it('marking a cell available trims a broader pre-existing range instead of ignoring it', () => {
+    const store = useEntitiesStore()
+    const teacherId = store.addTeacher('Guilherme')
+    // A range spanning three grid periods, entered before the grid UI existed.
+    store.addUnavailability(teacherId, 'tue', '08:00', '10:30')
+
+    // Clear only the middle period.
+    store.setAvailability(teacherId, 'tue', '08:50', '09:40', false)
+
+    const ranges = store.teacherById(teacherId)?.unavailability ?? []
+    expect(ranges.map((r) => [r.weekday, r.start, r.end])).toEqual([
+      ['tue', '08:00', '08:50'],
+      ['tue', '09:40', '10:30'],
+    ])
+  })
+
+  it('does not touch other weekdays', () => {
+    const store = useEntitiesStore()
+    const teacherId = store.addTeacher('Guilherme')
+    store.addUnavailability(teacherId, 'mon', '08:00', '08:50')
+
+    store.setAvailability(teacherId, 'tue', '08:00', '08:50', false)
+
+    expect(store.teacherById(teacherId)?.unavailability).toMatchObject([
+      { weekday: 'mon', start: '08:00', end: '08:50' },
+    ])
+  })
+
+  it('rejects an invalid range or a nonexistent Teacher', () => {
+    const store = useEntitiesStore()
+    const teacherId = store.addTeacher('Guilherme')
+    expect(store.setAvailability(teacherId, 'tue', '09:00', '08:00', true)).toBe(false)
+    expect(store.setAvailability('does-not-exist', 'tue', '08:00', '08:50', true)).toBe(false)
+  })
+})
+
+describe('entities store — availabilityGridPeriods (D-15)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('falls back to an hourly grid when no Segment is configured', () => {
+    const store = useEntitiesStore()
+    expect(store.availabilityGridPeriods[0]).toEqual({ start: '07:00', end: '08:00' })
+    expect(store.availabilityGridPeriods).toHaveLength(12)
+  })
+
+  it('merges and de-duplicates Time Slots across every Segment', () => {
+    const store = useEntitiesStore()
+    const efId = store.addSegment('EF')
+    store.addTimeSlot(efId, '08:00', '08:50')
+    store.addTimeSlot(efId, '08:50', '09:40')
+    const emId = store.addSegment('EM')
+    store.addTimeSlot(emId, '08:00', '08:50') // exact duplicate across Segments
+    store.addTimeSlot(emId, '07:00', '07:50')
+
+    expect(store.availabilityGridPeriods.map(({ start, end }) => ({ start, end }))).toEqual([
+      { start: '07:00', end: '07:50' },
+      { start: '08:00', end: '08:50' },
+      { start: '08:50', end: '09:40' },
+    ])
   })
 })
 

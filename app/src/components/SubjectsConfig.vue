@@ -19,53 +19,34 @@ function renameSubject(id: string, event: Event): void {
 </script>
 
 <template>
-  <section>
-    <h2>Disciplinas</h2>
+  <h2>Disciplinas</h2>
 
-    <ul class="subject-list">
+  <div class="card">
+    <ul class="pill-list">
       <li v-for="subject in store.subjects" :key="subject.id">
-        <input type="text" :value="subject.name" @change="renameSubject(subject.id, $event)" />
-        <button type="button" @click="store.removeSubject(subject.id)">Excluir</button>
+        <input
+          class="input"
+          type="text"
+          :value="subject.name"
+          @change="renameSubject(subject.id, $event)"
+        />
+        <button
+          type="button"
+          class="btn btn-danger btn-sm"
+          @click="store.removeSubject(subject.id)"
+        >
+          Excluir
+        </button>
       </li>
     </ul>
+    <p v-if="!store.subjects.length" class="empty">Nenhuma disciplina cadastrada.</p>
 
-    <form @submit.prevent="createSubject">
-      <label>
-        Nova disciplina
-        <input v-model="newSubjectName" type="text" placeholder="ex.: História" />
+    <form class="row" @submit.prevent="createSubject">
+      <label class="field">
+        <span class="field-label">Nova disciplina</span>
+        <input v-model="newSubjectName" class="input" type="text" placeholder="ex.: História" />
       </label>
-      <button type="submit">Adicionar Disciplina</button>
+      <button type="submit" class="btn btn-primary">Adicionar Disciplina</button>
     </form>
-  </section>
+  </div>
 </template>
-
-<style scoped>
-.subject-list {
-  list-style: none;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 12px;
-}
-
-.subject-list li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-form {
-  display: flex;
-  align-items: flex-end;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 0.9em;
-}
-</style>

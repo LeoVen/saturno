@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { isValidRange, rangesOverlap, sortByStart } from './time'
+import {
+  distinctSortedRanges,
+  hourlyPeriods,
+  isValidRange,
+  rangesOverlap,
+  sortByStart,
+  subtractRange,
+} from './time'
 
 describe('isValidRange', () => {
   it('accepts a start strictly before end', () => {
@@ -49,5 +56,79 @@ describe('rangesOverlap', () => {
 
   it('detects no overlap for disjoint ranges', () => {
     expect(rangesOverlap('08:00', '09:00', '10:00', '11:00')).toBe(false)
+  })
+})
+
+describe('subtractRange', () => {
+  it('returns the range unchanged when the cut does not overlap it', () => {
+    const range = { start: '08:00', end: '09:00' }
+    expect(subtractRange(range, { start: '10:00', end: '11:00' })).toEqual([range])
+  })
+
+  it('removes the range entirely when the cut fully covers it', () => {
+    const range = { start: '08:00', end: '09:00' }
+    expect(subtractRange(range, { start: '07:00', end: '10:00' })).toEqual([])
+  })
+
+  it('trims the tail when the cut overlaps the end', () => {
+    const range = { start: '08:00', end: '10:00' }
+    expect(subtractRange(range, { start: '09:00', end: '11:00' })).toEqual([
+      { start: '08:00', end: '09:00' },
+    ])
+  })
+
+  it('trims the head when the cut overlaps the start', () => {
+    const range = { start: '08:00', end: '10:00' }
+    expect(subtractRange(range, { start: '07:00', end: '09:00' })).toEqual([
+      { start: '09:00', end: '10:00' },
+    ])
+  })
+
+  it('splits into two pieces when the cut is strictly inside the range', () => {
+    const range = { start: '08:00', end: '12:00' }
+    expect(subtractRange(range, { start: '09:00', end: '10:00' })).toEqual([
+      { start: '08:00', end: '09:00' },
+      { start: '10:00', end: '12:00' },
+    ])
+  })
+
+  it('preserves extra fields on the pieces it returns', () => {
+    const range = { start: '08:00', end: '12:00', id: 'r1' }
+    expect(subtractRange(range, { start: '09:00', end: '10:00' })).toEqual([
+      { start: '08:00', end: '09:00', id: 'r1' },
+      { start: '10:00', end: '12:00', id: 'r1' },
+    ])
+  })
+})
+
+describe('distinctSortedRanges', () => {
+  it('sorts and removes exact duplicates', () => {
+    const ranges = [
+      { start: '09:00', end: '09:50' },
+      { start: '08:00', end: '08:50' },
+      { start: '08:00', end: '08:50' },
+    ]
+    expect(distinctSortedRanges(ranges)).toEqual([
+      { start: '08:00', end: '08:50' },
+      { start: '09:00', end: '09:50' },
+    ])
+  })
+
+  it('keeps ranges that overlap but are not exact duplicates', () => {
+    const ranges = [
+      { start: '08:00', end: '08:50' },
+      { start: '08:00', end: '09:00' },
+    ]
+    expect(distinctSortedRanges(ranges)).toHaveLength(2)
+  })
+})
+
+describe('hourlyPeriods', () => {
+  it('generates one-hour periods across the given range', () => {
+    expect(hourlyPeriods(7, 10)).toEqual([
+      { start: '07:00', end: '08:00' },
+      { start: '08:00', end: '09:00' },
+      { start: '09:00', end: '10:00' },
+    ])
   })
 })

@@ -1,14 +1,13 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useEntitiesStore } from '../stores/entities'
+import TimeInput from './TimeInput.vue'
+import WeekGrid, { type WeekGridColumn } from './WeekGrid.vue'
 
 const store = useEntitiesStore()
 
-// Which Segment is selected is shared with GradesClassesConfig (Grades/
-// Classes are configured nested under a Segment, per FR-6 / E03-T4).
-const selectedSegmentId = defineModel<string | null>({ default: null })
-
 const newSegmentName = ref('')
+const selectedSegmentId = ref('')
 
 const selectedSegment = computed(() =>
   selectedSegmentId.value ? store.segmentById(selectedSegmentId.value) : undefined,
@@ -23,11 +22,51 @@ function createSegment(): void {
 
 function deleteSegment(id: string): void {
   store.removeSegment(id)
-  if (selectedSegmentId.value === id) selectedSegmentId.value = null
+  if (selectedSegmentId.value === id) selectedSegmentId.value = ''
 }
 
-// Local draft state for the "add" rows (Time Slots / Breaks) — kept out of
-// the store since it's not valid data until submitted.
+// A Segment's periods/breaks are the same every weekday (D-02), so they're
+// shown as a single-column timeline rather than a real 5-day grid — the
+// grid layout is reused purely for visual consistency with Teacher
+// Availability's genuine weekly grid.
+const DAY_COLUMN: WeekGridColumn[] = [{ key: 'all', label: 'Todos os dias' }]
+
+type Entry = { key: string; kind: 'period' | 'break'; id: string; start: string; end: string }
+
+const entries = computed<Entry[]>(() => {
+  if (!selectedSegment.value) return []
+  const periods = selectedSegment.value.timeSlots.map((t): Entry => ({
+    key: `period-${t.id}`,
+    kind: 'period',
+    id: t.id,
+    start: t.start,
+    end: t.end,
+  }))
+  const breaks = selectedSegment.value.breaks.map((b): Entry => ({
+    key: `break-${b.id}`,
+    kind: 'break',
+    id: b.id,
+    start: b.start,
+    end: b.end,
+  }))
+  return [...periods, ...breaks].sort((a, b) => a.start.localeCompare(b.start))
+})
+
+const rows = computed(() =>
+  entries.value.map((e) => ({ key: e.key, label: `${e.start}–${e.end}` })),
+)
+
+function entryFor(rowKey: string): Entry | undefined {
+  return entries.value.find((e) => e.key === rowKey)
+}
+
+function removeEntry(entry: Entry): void {
+  if (!selectedSegment.value) return
+  if (entry.kind === 'period') store.removeTimeSlot(selectedSegment.value.id, entry.id)
+  else store.removeBreak(selectedSegment.value.id, entry.id)
+}
+
+// Draft state for the "add" forms below the timeline.
 const newSlotStart = ref('')
 const newSlotEnd = ref('')
 const slotError = ref('')
@@ -35,13 +74,11 @@ const slotError = ref('')
 function addTimeSlot(): void {
   if (!selectedSegment.value) return
   const id = store.addTimeSlot(selectedSegment.value.id, newSlotStart.value, newSlotEnd.value)
-  if (id === undefined) {
-    slotError.value = 'Horário inválido: o início deve ser antes do término.'
-    return
+  slotError.value = id === undefined ? 'Horário inválido: o início deve ser antes do término.' : ''
+  if (id !== undefined) {
+    newSlotStart.value = ''
+    newSlotEnd.value = ''
   }
-  slotError.value = ''
-  newSlotStart.value = ''
-  newSlotEnd.value = ''
 }
 
 const newBreakStart = ref('')
@@ -51,215 +88,117 @@ const breakError = ref('')
 function addBreak(): void {
   if (!selectedSegment.value) return
   const id = store.addBreak(selectedSegment.value.id, newBreakStart.value, newBreakEnd.value)
-  if (id === undefined) {
-    breakError.value = 'Horário inválido: o início deve ser antes do término.'
-    return
+  breakError.value = id === undefined ? 'Horário inválido: o início deve ser antes do término.' : ''
+  if (id !== undefined) {
+    newBreakStart.value = ''
+    newBreakEnd.value = ''
   }
-  breakError.value = ''
-  newBreakStart.value = ''
-  newBreakEnd.value = ''
-}
-
-function onTimeSlotEdit(timeSlotId: string, field: 'start' | 'end', value: string): void {
-  if (!selectedSegment.value) return
-  const timeSlot = selectedSegment.value.timeSlots.find((t) => t.id === timeSlotId)
-  if (!timeSlot) return
-  const start = field === 'start' ? value : timeSlot.start
-  const end = field === 'end' ? value : timeSlot.end
-  store.updateTimeSlot(selectedSegment.value.id, timeSlotId, start, end)
-}
-
-function onBreakEdit(breakId: string, field: 'start' | 'end', value: string): void {
-  if (!selectedSegment.value) return
-  const breakPeriod = selectedSegment.value.breaks.find((b) => b.id === breakId)
-  if (!breakPeriod) return
-  const start = field === 'start' ? value : breakPeriod.start
-  const end = field === 'end' ? value : breakPeriod.end
-  store.updateBreak(selectedSegment.value.id, breakId, start, end)
 }
 </script>
 
 <template>
-  <section>
-    <h2>Segmentos</h2>
+  <h2>Segmentos</h2>
 
-    <ul class="segment-list">
+  <div class="card">
+    <ul class="pill-list">
       <li v-for="segment in store.segments" :key="segment.id">
         <button
           type="button"
-          class="segment-name"
+          class="pill"
           :class="{ selected: segment.id === selectedSegmentId }"
           @click="selectedSegmentId = segment.id"
         >
           {{ segment.name }}
         </button>
-        <button type="button" @click="deleteSegment(segment.id)">Excluir</button>
+        <button type="button" class="btn btn-danger btn-sm" @click="deleteSegment(segment.id)">
+          Excluir
+        </button>
       </li>
     </ul>
+    <p v-if="!store.segments.length" class="empty">Nenhum segmento cadastrado.</p>
 
-    <form @submit.prevent="createSegment">
-      <label>
-        Novo segmento
-        <input v-model="newSegmentName" type="text" placeholder="ex.: Ensino Fundamental" />
+    <form class="row" @submit.prevent="createSegment">
+      <label class="field">
+        <span class="field-label">Novo segmento</span>
+        <input
+          v-model="newSegmentName"
+          class="input"
+          type="text"
+          placeholder="ex.: Ensino Fundamental"
+        />
       </label>
-      <button type="submit">Adicionar Segmento</button>
+      <button type="submit" class="btn btn-primary">Adicionar Segmento</button>
     </form>
-  </section>
+  </div>
 
-  <section v-if="selectedSegment">
+  <div v-if="selectedSegment" class="card">
     <h3>Horários e intervalos de "{{ selectedSegment.name }}"</h3>
+    <p class="muted">
+      Os mesmos períodos e intervalos valem para todos os dias da semana neste Segmento.
+    </p>
 
-    <div>
-      <h4>Períodos (Time Slots)</h4>
-      <table v-if="selectedSegment.timeSlots.length">
-        <thead>
-          <tr>
-            <th>Início</th>
-            <th>Término</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="slot in selectedSegment.timeSlots" :key="slot.id">
-            <td>
-              <input
-                type="time"
-                :value="slot.start"
-                @change="
-                  onTimeSlotEdit(slot.id, 'start', ($event.target as HTMLInputElement).value)
-                "
-              />
-            </td>
-            <td>
-              <input
-                type="time"
-                :value="slot.end"
-                @change="onTimeSlotEdit(slot.id, 'end', ($event.target as HTMLInputElement).value)"
-              />
-            </td>
-            <td>
-              <button type="button" @click="store.removeTimeSlot(selectedSegment!.id, slot.id)">
-                Remover
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <p v-else>Nenhum período cadastrado.</p>
+    <WeekGrid :columns="DAY_COLUMN" :rows="rows">
+      <template #cell="{ row }">
+        <div v-if="entryFor(row.key)" class="entry" :class="entryFor(row.key)!.kind">
+          <span>{{ entryFor(row.key)!.kind === 'period' ? 'Período' : 'Intervalo' }}</span>
+          <button type="button" class="btn btn-sm" @click="removeEntry(entryFor(row.key)!)">
+            Remover
+          </button>
+        </div>
+      </template>
+    </WeekGrid>
+    <p v-if="!rows.length" class="empty">Nenhum período ou intervalo cadastrado ainda.</p>
 
-      <form @submit.prevent="addTimeSlot">
-        <label>
-          Início
-          <input v-model="newSlotStart" type="time" required />
-        </label>
-        <label>
-          Término
-          <input v-model="newSlotEnd" type="time" required />
-        </label>
-        <button type="submit">Adicionar Período</button>
-        <p v-if="slotError" role="alert">{{ slotError }}</p>
+    <div class="row add-rows">
+      <form class="stack" @submit.prevent="addTimeSlot">
+        <span class="field-label">Adicionar Período</span>
+        <div class="row">
+          <TimeInput v-model="newSlotStart" allow-empty />
+          <span>até</span>
+          <TimeInput v-model="newSlotEnd" allow-empty />
+          <button type="submit" class="btn">Adicionar</button>
+        </div>
+        <p v-if="slotError" class="alert alert-danger" role="alert">{{ slotError }}</p>
+      </form>
+
+      <form class="stack" @submit.prevent="addBreak">
+        <span class="field-label">Adicionar Intervalo</span>
+        <div class="row">
+          <TimeInput v-model="newBreakStart" allow-empty />
+          <span>até</span>
+          <TimeInput v-model="newBreakEnd" allow-empty />
+          <button type="submit" class="btn">Adicionar</button>
+        </div>
+        <p v-if="breakError" class="alert alert-danger" role="alert">{{ breakError }}</p>
       </form>
     </div>
-
-    <div>
-      <h4>Intervalos (Breaks)</h4>
-      <table v-if="selectedSegment.breaks.length">
-        <thead>
-          <tr>
-            <th>Início</th>
-            <th>Término</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="brk in selectedSegment.breaks" :key="brk.id">
-            <td>
-              <input
-                type="time"
-                :value="brk.start"
-                @change="onBreakEdit(brk.id, 'start', ($event.target as HTMLInputElement).value)"
-              />
-            </td>
-            <td>
-              <input
-                type="time"
-                :value="brk.end"
-                @change="onBreakEdit(brk.id, 'end', ($event.target as HTMLInputElement).value)"
-              />
-            </td>
-            <td>
-              <button type="button" @click="store.removeBreak(selectedSegment!.id, brk.id)">
-                Remover
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <p v-else>Nenhum intervalo cadastrado.</p>
-
-      <form @submit.prevent="addBreak">
-        <label>
-          Início
-          <input v-model="newBreakStart" type="time" required />
-        </label>
-        <label>
-          Término
-          <input v-model="newBreakEnd" type="time" required />
-        </label>
-        <button type="submit">Adicionar Intervalo</button>
-        <p v-if="breakError" role="alert">{{ breakError }}</p>
-      </form>
-    </div>
-  </section>
+  </div>
 </template>
 
 <style scoped>
-.segment-list {
-  list-style: none;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.add-rows {
+  margin-top: var(--space-4);
+  align-items: flex-start;
 }
 
-.segment-list li {
+.entry {
+  height: 100%;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: 0.85rem;
 }
 
-.segment-name {
-  font: inherit;
-  padding: 4px 8px;
+.entry.period {
+  background: var(--color-selected-bg);
+  color: var(--color-primary);
 }
 
-.segment-name.selected {
-  font-weight: bold;
-}
-
-table {
-  border-collapse: collapse;
-  margin-bottom: 12px;
-}
-
-th,
-td {
-  padding: 4px 8px;
-  text-align: left;
-}
-
-form {
-  display: flex;
-  align-items: flex-end;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 24px;
-}
-
-label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 0.9em;
+.entry.break {
+  background: #fef3e2;
+  color: #92620a;
 }
 </style>
