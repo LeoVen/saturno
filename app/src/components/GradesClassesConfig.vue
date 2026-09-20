@@ -64,8 +64,26 @@ function renameClass(id: string, event: Event): void {
     <h3>Séries de "{{ segment.name }}"</h3>
 
     <ul class="grade-list">
-      <li v-for="grade in grades" :key="grade.id" class="grade-item">
+      <li v-for="(grade, index) in grades" :key="grade.id" class="grade-item">
         <div class="grade-header">
+          <button
+            type="button"
+            class="btn btn-sm"
+            :disabled="index === 0"
+            aria-label="Mover para cima"
+            @click="store.moveGrade(grade.id, 'up')"
+          >
+            ▲
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm"
+            :disabled="index === grades.length - 1"
+            aria-label="Mover para baixo"
+            @click="store.moveGrade(grade.id, 'down')"
+          >
+            ▼
+          </button>
           <input
             class="input grade-name"
             type="text"

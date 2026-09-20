@@ -22,7 +22,7 @@ import {
   findZeroOverlapAssignments,
 } from '../entities/validation'
 import type { AssignmentAvailabilityCheck, ClassLoad } from '../entities/validation'
-import { moveItem, type MoveDirection } from '../entities/reorder'
+import { moveItem, moveItemWithinGroup, type MoveDirection } from '../entities/reorder'
 
 /**
  * The entities store (IMPL.md §7): source of truth for school configuration,
@@ -63,6 +63,18 @@ export const useEntitiesStore = defineStore('entities', {
     },
     classesByGrade: (state) => {
       return (gradeId: string): Class[] => state.classes.filter((c) => c.gradeId === gradeId)
+    },
+    /**
+     * Every Class in natural display order — Segment order, then Grade
+     * order within it (both user-reorderable, D-26/moveGrade), then Class
+     * order within its Grade — rather than an alphabetical relabeling.
+     * This is what every "pick any Class" dropdown across the app should
+     * render from, so it reflects the order the user actually arranged.
+     */
+    orderedClasses(): Class[] {
+      return this.segments.flatMap((segment) =>
+        this.gradesBySegment(segment.id).flatMap((grade) => this.classesByGrade(grade.id)),
+      )
     },
     teacherById: (state) => {
       return (id: string): Teacher | undefined => state.teachers.find((t) => t.id === id)
@@ -241,6 +253,17 @@ export const useEntitiesStore = defineStore('entities', {
       const orphanedClassIds = new Set(this.classesByGrade(id).map((c) => c.id))
       this.classes = this.classes.filter((c) => c.gradeId !== id)
       this.assignments = this.assignments.filter((a) => !orphanedClassIds.has(a.classId))
+    },
+
+    /**
+     * Grades have no natural sort key (like Teachers/Subjects, D-26) — but
+     * unlike those, `grades` is one flat array shared across every Segment,
+     * so a swap must stay within the same Segment's Grades rather than the
+     * flat array's raw neighbor (which could belong to a different Segment
+     * entirely).
+     */
+    moveGrade(id: string, direction: MoveDirection): void {
+      this.grades = moveItemWithinGroup(this.grades, id, direction, (g) => g.segmentId)
     },
 
     addClass(gradeId: string, name: string): string | undefined {

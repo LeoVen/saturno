@@ -110,3 +110,5 @@ generation is ever attempted.
   narrowed to Teachers qualified for that Subject — see [D-25](../DECISIONS.md).
 - **Retrofit** (2026-09-20): bulk-copy between Classes, table filters, and
   a per-Class weekly-load summary — see [D-27](../DECISIONS.md).
+- **Retrofit** (2026-09-20): the Turma pickers now follow Segment/Grade/
+  Class order instead of an alphabetical relabeling — see [D-28](../DECISIONS.md).

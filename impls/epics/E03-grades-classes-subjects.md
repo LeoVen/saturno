@@ -70,3 +70,7 @@ solver ultimately builds a schedule for.
   off ("looks good to me"). E03-T6 and the epic moved to `done`.
 - **Retrofit** (2026-09-20): the Subjects list gained manual up/down
   reordering — see [D-26](../DECISIONS.md).
+- **Retrofit** (2026-09-20): Grades gained manual up/down reordering
+  within their Segment, and every Class picker across the app now follows
+  Segment/Grade/Class order instead of an alphabetical relabeling — see
+  [D-28](../DECISIONS.md).

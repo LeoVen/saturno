@@ -16,10 +16,10 @@ function subjectLabel(subjectId: string): string {
   return store.subjectById(subjectId)?.name ?? '?'
 }
 
+// Segment/Grade/Class order (both Grade and Class levels user-reorderable),
+// not an alphabetical relabeling — see entities store's `orderedClasses`.
 const allClasses = computed(() =>
-  [...store.classes]
-    .map((c) => ({ id: c.id, label: classLabel(c.id) }))
-    .sort((a, b) => a.label.localeCompare(b.label)),
+  store.orderedClasses.map((c) => ({ id: c.id, label: classLabel(c.id) })),
 )
 
 const selectedClassId = ref('')
@@ -121,12 +121,14 @@ const filteredAssignments = computed(() =>
 )
 
 // Weekly-load summary: lets the user sanity-check total input at a glance,
-// sorted the same way every other Class listing in the app is.
-const classLoadRows = computed(() =>
-  [...store.classLoads]
-    .map((load) => ({ ...load, label: classLabel(load.classId) }))
-    .sort((a, b) => a.label.localeCompare(b.label)),
-)
+// ordered the same way every other Class listing in the app is.
+const classLoadRows = computed(() => {
+  const loadsByClassId = new Map(store.classLoads.map((load) => [load.classId, load]))
+  return store.orderedClasses.map((c) => ({
+    ...loadsByClassId.get(c.id)!,
+    label: classLabel(c.id),
+  }))
+})
 </script>
 
 <template>

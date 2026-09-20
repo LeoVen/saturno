@@ -393,4 +393,36 @@ Template for a new entry:
   `entities.ts`'s `copyAssignments`/`classLoads`) — already `done`; a
   retrofit, not a reopening of its checkpoint.
 
+## D-28 — Grade reordering within a Segment, and every Class picker follows structural order
+
+- **Date**: 2026-09-20
+- **Type**: Implementation-only
+- **Spec refs**: FR-6, D-26
+- **What changes**: Grades gain the same up/down reordering as Teachers/
+  Subjects (D-26), scoped to their own Segment — `grades` is one flat
+  array shared across every Segment, so the new `moveItemWithinGroup`
+  helper swaps only against a same-Segment neighbor, never reaching into
+  another Segment's Grades. Separately (and just as load-bearing): every
+  "pick any Class" dropdown across the app (Assignments, the Schedule
+  Grid, the weekly-load summary) previously re-sorted alphabetically by
+  the "Segment / Grade / Class" label string, which would have silently
+  overridden any Grade (or Segment) ordering the user set up. Those now
+  render from a new `orderedClasses` getter — Segment order, then Grade
+  order within it, then Class order within its Grade — so a picker
+  reflects the order the user actually arranged, not a relabeling. The
+  Per-Teacher view's Teacher picker had the same alphabetical-relabeling
+  bug for Teachers (missed when D-26 landed) and is fixed the same way.
+- **Why**: user-requested for Grades specifically — "I don't want to
+  punish the user for having created them initially out of order and then
+  the dropdown is not in order that they expect." Fixing only the Grade
+  reorder action without also fixing the alphabetical-sort pickers would
+  have left the feature invisible everywhere except the Séries e Turmas
+  screen itself.
+- **Affected epics/tasks**: E03 (`GradesClassesConfig.vue`,
+  `entities.ts`'s `moveGrade`/`orderedClasses`) and E05
+  (`AssignmentsConfig.vue`), both already `done`, plus `ScheduleGrid.vue`
+  (shared by E06/E07) and `TeacherScheduleGrid.vue` (E08) — those two
+  still `in-review`, so this isn't a reopening of any epic's checkpoint
+  either way, just an amendment to files those epics already introduced.
+
 *(entries above are the most recent)*

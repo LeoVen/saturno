@@ -22,10 +22,10 @@ function classLabel(classId: string): string {
   return [segment?.name, grade?.name, schoolClass.name].filter(Boolean).join(' / ')
 }
 
+// Segment/Grade/Class order (both Grade and Class levels user-reorderable),
+// not an alphabetical relabeling — see entities store's `orderedClasses`.
 const allClasses = computed(() =>
-  [...entities.classes]
-    .map((c) => ({ id: c.id, label: classLabel(c.id) }))
-    .sort((a, b) => a.label.localeCompare(b.label)),
+  entities.orderedClasses.map((c) => ({ id: c.id, label: classLabel(c.id) })),
 )
 
 const selectedClassId = ref('')

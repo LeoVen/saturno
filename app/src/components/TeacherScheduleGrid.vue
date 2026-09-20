@@ -23,10 +23,10 @@ function classLabel(classId: string): string {
   return [segment?.name, grade?.name, schoolClass.name].filter(Boolean).join(' / ')
 }
 
+// Store order, not an alphabetical relabeling — Teachers are user-orderable
+// (D-26) on the Professores screen, and every picker should reflect that.
 const allTeachers = computed(() =>
-  [...entities.teachers]
-    .map((t) => ({ id: t.id, label: entities.teacherLabel(t.id) }))
-    .sort((a, b) => a.label.localeCompare(b.label)),
+  entities.teachers.map((t) => ({ id: t.id, label: entities.teacherLabel(t.id) })),
 )
 
 const selectedTeacherId = ref('')

@@ -163,6 +163,26 @@ describe('entities store — Grades', () => {
     expect(store.grades).toHaveLength(0)
     expect(store.classes).toHaveLength(0)
   })
+
+  it('reorders Grades within their own Segment only, ignoring other Segments interleaved in storage', () => {
+    const store = useEntitiesStore()
+    const segA = store.addSegment('EF')
+    const segB = store.addSegment('EM')
+    // Interleaved on purpose, as real usage would create them.
+    const a1 = store.addGrade(segA, 'A1') as string
+    const b1 = store.addGrade(segB, 'B1') as string
+    const a2 = store.addGrade(segA, 'A2') as string
+
+    store.moveGrade(a2, 'up')
+    expect(store.gradesBySegment(segA).map((g) => g.id)).toEqual([a2, a1])
+    // segB's own Grade order is untouched.
+    expect(store.gradesBySegment(segB).map((g) => g.id)).toEqual([b1])
+
+    // No-op: a2 is now first within segA, even though b1 sits before it
+    // in the flat underlying array.
+    store.moveGrade(a2, 'up')
+    expect(store.gradesBySegment(segA).map((g) => g.id)).toEqual([a2, a1])
+  })
 })
 
 describe('entities store — Classes', () => {
@@ -191,6 +211,24 @@ describe('entities store — Classes', () => {
     const store = useEntitiesStore()
     expect(store.addClass('does-not-exist', '7º Ano A')).toBeUndefined()
     expect(store.classes).toHaveLength(0)
+  })
+
+  it('orderedClasses reflects Segment/Grade/Class order, not alphabetical order', () => {
+    const store = useEntitiesStore()
+    // "EM" added after "EF" but named to sort before it alphabetically —
+    // orderedClasses must still follow Segment creation order.
+    const segEF = store.addSegment('EF')
+    const segEM = store.addSegment('EM')
+    const gradeEF = store.addGrade(segEF, '9º Ano') as string
+    const gradeEM = store.addGrade(segEM, '1ª Série') as string
+    const classEF = store.addClass(gradeEF, 'Turma Z') as string
+    const classEM = store.addClass(gradeEM, 'Turma A') as string
+
+    expect(store.orderedClasses.map((c) => c.id)).toEqual([classEF, classEM])
+
+    // Reordering the Grades changes the derived Class order too.
+    store.moveGrade(gradeEM, 'up') // no-op: different Segment, no sibling to swap with
+    expect(store.orderedClasses.map((c) => c.id)).toEqual([classEF, classEM])
   })
 })
 
