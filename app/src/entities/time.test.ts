@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isValidRange, sortByStart } from './time'
+import { isValidRange, rangesOverlap, sortByStart } from './time'
 
 describe('isValidRange', () => {
   it('accepts a start strictly before end', () => {
@@ -31,5 +31,23 @@ describe('sortByStart', () => {
     const sorted = sortByStart(items)
     expect(sorted).not.toBe(items)
     expect(items[0]?.start).toBe('10:00')
+  })
+})
+
+describe('rangesOverlap', () => {
+  it('detects a partial overlap', () => {
+    expect(rangesOverlap('08:00', '09:00', '08:30', '09:30')).toBe(true)
+  })
+
+  it('detects one range fully containing the other', () => {
+    expect(rangesOverlap('08:00', '12:00', '09:00', '10:00')).toBe(true)
+  })
+
+  it('treats touching (back-to-back) ranges as not overlapping', () => {
+    expect(rangesOverlap('08:00', '09:00', '09:00', '10:00')).toBe(false)
+  })
+
+  it('detects no overlap for disjoint ranges', () => {
+    expect(rangesOverlap('08:00', '09:00', '10:00', '11:00')).toBe(false)
   })
 })

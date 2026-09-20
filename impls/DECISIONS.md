@@ -135,4 +135,24 @@ Template for a new entry:
 
 ---
 
+## D-12 — Assignment: FR-8/9/10/12 combined into one entity, with a Teacher pool (not a single Teacher)
+
+- **Date**: 2026-09-20
+- **Type**: Clarification
+- **Spec refs**: FR-8, FR-9, FR-10, FR-12, FR-36
+- **What changes**: a single `Assignment` entity, keyed by (Class, Subject), carries `weeklyOccurrences` (FR-8), `consecutivePeriods` (FR-10, capped at 3), `allowSameDayRepetition` (FR-12), and `teacherIds: string[]` (FR-9) — one entity rather than splitting the weekly-count/period-shape config from the Teacher relationship. `teacherIds` holds *one or more* Teachers, not exactly one.
+- **Why**: FR-8/10/12 all describe config scoped to one (Class, Subject) pair, so one entity avoids an artificial split with no other justification. The array (vs. a single `teacherId`) is because FR-36 (repair) explicitly reuses "another Teacher already configured for that (Class, Subject) pair" — the schema needs room for that substitute pool from the moment Assignments are introduced, not bolted on later. Every Teacher in the list is a legitimate teacher of that (Class, Subject); which one is used for a normal generation vs. which for repair is a solver-time concern (E06/E14), not a data-model one.
+- **Affected epics/tasks**: E05 (Assignment entity/UI); E06 (Constructor picks among `teacherIds`); E14 (Repair's substitute pool is exactly `teacherIds` minus the absent Teacher).
+
+## D-13 — FR-13 validation: precise definitions of "available periods" and "zero overlap"
+
+- **Date**: 2026-09-20
+- **Type**: Clarification
+- **Spec refs**: FR-13
+- **What changes**: two precise, testable definitions for FR-13's prose: (1) a Class's "available non-break periods" = its Grade's Segment's Time Slot count-per-day × 5 weekdays (D-02's fixed structure, D-10's 5-day week) — Breaks are already excluded since they're not Time Slots. The overload check sums `weeklyOccurrences` across *all* of a Class's Assignments and compares against this figure, not per-Assignment. (2) "zero overlapping availability" for a Teacher assigned to a (Class, Subject) = *every single one* of the Class's weekly periods (across all 5 weekdays) falls inside some `UnavailabilityRange` of that Teacher — i.e. there is no time the Teacher could ever teach that Class, not merely a busy-but-not-impossible schedule.
+- **Why**: FR-13 states the checks at the level of intent ("exceeds the number of non-break periods," "zero overlapping availability") without pinning down the arithmetic — needed a concrete, unit-testable definition to implement against.
+- **Affected epics/tasks**: E05 (`entities/validation.ts`'s `findOverloadedClasses`/`findZeroOverlapAssignments`, unit-tested per TR-11).
+
+---
+
 *(entries above are the most recent)*

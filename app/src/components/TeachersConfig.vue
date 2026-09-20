@@ -93,6 +93,25 @@ function editUnavailability(
   const end = field === 'end' ? value : range.end
   store.updateUnavailability(selectedTeacher.value.id, rangeId, weekday, start, end)
 }
+
+// FR-11: per-Teacher optional daily/consecutive-period limits.
+type LimitField = 'maxPeriodsPerDay' | 'minConsecutivePeriods' | 'maxConsecutivePeriods'
+const limitsError = ref('')
+
+function onLimitChange(field: LimitField, event: Event): void {
+  if (!selectedTeacher.value) return
+  const raw = (event.target as HTMLInputElement).value
+  const value = raw === '' ? undefined : Number(raw)
+  const ok = store.setTeacherLimits(selectedTeacher.value.id, {
+    maxPeriodsPerDay: selectedTeacher.value.maxPeriodsPerDay,
+    minConsecutivePeriods: selectedTeacher.value.minConsecutivePeriods,
+    maxConsecutivePeriods: selectedTeacher.value.maxConsecutivePeriods,
+    [field]: value,
+  })
+  limitsError.value = ok
+    ? ''
+    : 'Valor inválido: use um número inteiro positivo, com mínimo ≤ máximo.'
+}
 </script>
 
 <template>
@@ -139,6 +158,40 @@ function editUnavailability(
       Por padrão, o professor está disponível em todos os horários. Cadastre abaixo os períodos em
       que ele fica indisponível (ex.: apenas terça à tarde).
     </p>
+
+    <div>
+      <h4>Limites do professor</h4>
+      <div class="limits">
+        <label>
+          Máx. de aulas por dia
+          <input
+            type="number"
+            min="1"
+            :value="selectedTeacher.maxPeriodsPerDay ?? ''"
+            @change="onLimitChange('maxPeriodsPerDay', $event)"
+          />
+        </label>
+        <label>
+          Mín. de aulas consecutivas
+          <input
+            type="number"
+            min="1"
+            :value="selectedTeacher.minConsecutivePeriods ?? ''"
+            @change="onLimitChange('minConsecutivePeriods', $event)"
+          />
+        </label>
+        <label>
+          Máx. de aulas consecutivas
+          <input
+            type="number"
+            min="1"
+            :value="selectedTeacher.maxConsecutivePeriods ?? ''"
+            @change="onLimitChange('maxConsecutivePeriods', $event)"
+          />
+        </label>
+      </div>
+      <p v-if="limitsError" role="alert">{{ limitsError }}</p>
+    </div>
 
     <div class="day-grid">
       <div v-for="day in WEEKDAYS" :key="day" class="day-column">
@@ -218,6 +271,18 @@ function editUnavailability(
 .hint {
   font-size: 0.9em;
   color: gray;
+}
+
+.limits {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.limits input {
+  width: 5em;
 }
 
 .day-grid {

@@ -13,3 +13,13 @@ export function isValidRange(start: ClockTime, end: ClockTime): boolean {
 export function sortByStart<T extends { start: ClockTime }>(items: T[]): T[] {
   return [...items].sort((a, b) => a.start.localeCompare(b.start))
 }
+
+/** Whether [aStart, aEnd) and [bStart, bEnd) overlap at all (used by FR-13's availability check). */
+export function rangesOverlap(
+  aStart: ClockTime,
+  aEnd: ClockTime,
+  bStart: ClockTime,
+  bEnd: ClockTime,
+): boolean {
+  return aStart < bEnd && bStart < aEnd
+}

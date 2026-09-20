@@ -1,4 +1,5 @@
-// FR-2 (Teacher entity, name not unique) and FR-3 (weekly availability).
+// FR-2 (Teacher entity, name not unique), FR-3 (weekly availability), and
+// FR-11 (optional per-Teacher daily/consecutive-period limits).
 //
 // D-01: availability is modeled as arbitrary (weekday, start, end) time
 // ranges, not a per-Segment period-index grid, since a Teacher's
@@ -21,4 +22,8 @@ export interface Teacher {
   id: string
   name: string
   unavailability: UnavailabilityRange[]
+  /** FR-11: all three limits are optional — undefined means "no limit configured". */
+  maxPeriodsPerDay?: number
+  minConsecutivePeriods?: number
+  maxConsecutivePeriods?: number
 }

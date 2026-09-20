@@ -5,8 +5,16 @@ import type { Class } from '../entities/class'
 import type { Subject } from '../entities/subject'
 import type { Teacher, UnavailabilityRange } from '../entities/teacher'
 import type { Weekday } from '../entities/weekday'
+import type { Assignment } from '../entities/assignment'
+import { MAX_CONSECUTIVE_PERIODS } from '../entities/assignment'
 import { isValidRange, sortByStart } from '../entities/time'
 import { sortByWeekdayThenStart } from '../entities/weekday'
+import {
+  allWeeklyPeriods,
+  findOverloadedClasses,
+  findZeroOverlapAssignments,
+} from '../entities/validation'
+import type { AssignmentAvailabilityCheck, ClassLoad } from '../entities/validation'
 
 /**
  * The entities store (IMPL.md §7): source of truth for school configuration,
@@ -27,6 +35,7 @@ export const useEntitiesStore = defineStore('entities', {
     classes: [] as Class[],
     subjects: [] as Subject[],
     teachers: [] as Teacher[],
+    assignments: [] as Assignment[],
   }),
   getters: {
     segmentById: (state) => {
@@ -50,6 +59,51 @@ export const useEntitiesStore = defineStore('entities', {
     teacherById: (state) => {
       return (id: string): Teacher | undefined => state.teachers.find((t) => t.id === id)
     },
+    assignmentById: (state) => {
+      return (id: string): Assignment | undefined => state.assignments.find((a) => a.id === id)
+    },
+    assignmentsByClass: (state) => {
+      return (classId: string): Assignment[] =>
+        state.assignments.filter((a) => a.classId === classId)
+    },
+    assignmentByClassSubject: (state) => {
+      return (classId: string, subjectId: string): Assignment | undefined =>
+        state.assignments.find((a) => a.classId === classId && a.subjectId === subjectId)
+    },
+    /** Every Time Slot (across all 5 weekdays) the given Class is schedulable during, via its Grade's Segment. */
+    classWeeklyPeriods() {
+      return (classId: string) => {
+        const schoolClass = this.classById(classId)
+        const grade = schoolClass ? this.gradeById(schoolClass.gradeId) : undefined
+        const segment = grade ? this.segmentById(grade.segmentId) : undefined
+        return allWeeklyPeriods(segment?.timeSlots ?? [])
+      }
+    },
+    /** FR-13: Classes whose total weekly required occurrences exceed their Segment's available periods. */
+    overloadedClasses(): ClassLoad[] {
+      const loads: ClassLoad[] = this.classes.map((c) => ({
+        classId: c.id,
+        requiredWeekly: this.assignmentsByClass(c.id).reduce(
+          (sum, a) => sum + a.weeklyOccurrences,
+          0,
+        ),
+        availableWeekly: this.classWeeklyPeriods(c.id).length,
+      }))
+      return findOverloadedClasses(loads)
+    },
+    /** FR-13: Assignments whose Teacher has zero overlapping availability with the Class's periods. */
+    zeroOverlapAssignments() {
+      const checks: AssignmentAvailabilityCheck[] = this.assignments.flatMap((a) =>
+        a.teacherIds.map((teacherId) => ({
+          assignmentId: a.id,
+          teacherId,
+          classId: a.classId,
+          classPeriods: this.classWeeklyPeriods(a.classId),
+          unavailability: this.teacherById(teacherId)?.unavailability ?? [],
+        })),
+      )
+      return findZeroOverlapAssignments(checks)
+    },
   },
   actions: {
     addSegment(name: string): string {
@@ -65,10 +119,15 @@ export const useEntitiesStore = defineStore('entities', {
 
     removeSegment(id: string): void {
       this.segments = this.segments.filter((s) => s.id !== id)
-      // Cascade: a Grade cannot outlive its Segment (FR-6), nor a Class its Grade.
+      // Cascade: a Grade cannot outlive its Segment (FR-6), nor a Class its
+      // Grade, nor an Assignment its Class.
       const orphanedGradeIds = new Set(this.gradesBySegment(id).map((g) => g.id))
+      const orphanedClassIds = new Set(
+        this.classes.filter((c) => orphanedGradeIds.has(c.gradeId)).map((c) => c.id),
+      )
       this.grades = this.grades.filter((g) => !orphanedGradeIds.has(g.id))
       this.classes = this.classes.filter((c) => !orphanedGradeIds.has(c.gradeId))
+      this.assignments = this.assignments.filter((a) => !orphanedClassIds.has(a.classId))
     },
 
     addTimeSlot(segmentId: string, start: string, end: string): string | undefined {
@@ -133,7 +192,9 @@ export const useEntitiesStore = defineStore('entities', {
 
     removeGrade(id: string): void {
       this.grades = this.grades.filter((g) => g.id !== id)
+      const orphanedClassIds = new Set(this.classesByGrade(id).map((c) => c.id))
       this.classes = this.classes.filter((c) => c.gradeId !== id)
+      this.assignments = this.assignments.filter((a) => !orphanedClassIds.has(a.classId))
     },
 
     addClass(gradeId: string, name: string): string | undefined {
@@ -150,6 +211,7 @@ export const useEntitiesStore = defineStore('entities', {
 
     removeClass(id: string): void {
       this.classes = this.classes.filter((c) => c.id !== id)
+      this.assignments = this.assignments.filter((a) => a.classId !== id)
     },
 
     addSubject(name: string): string {
@@ -165,6 +227,7 @@ export const useEntitiesStore = defineStore('entities', {
 
     removeSubject(id: string): void {
       this.subjects = this.subjects.filter((s) => s.id !== id)
+      this.assignments = this.assignments.filter((a) => a.subjectId !== id)
     },
 
     addTeacher(name: string): string {
@@ -183,6 +246,11 @@ export const useEntitiesStore = defineStore('entities', {
 
     removeTeacher(id: string): void {
       this.teachers = this.teachers.filter((t) => t.id !== id)
+      // An Assignment outlives a removed Teacher — it just loses that one
+      // link from teacherIds (FR-9), rather than being deleted outright.
+      for (const assignment of this.assignments) {
+        assignment.teacherIds = assignment.teacherIds.filter((tid) => tid !== id)
+      }
     },
 
     addUnavailability(
@@ -219,6 +287,102 @@ export const useEntitiesStore = defineStore('entities', {
       const teacher = this.teacherById(teacherId)
       if (!teacher) return
       teacher.unavailability = teacher.unavailability.filter((r) => r.id !== rangeId)
+    },
+
+    /** FR-11. Each limit is optional — pass `undefined` to clear it. Replaces all three at once. */
+    setTeacherLimits(
+      teacherId: string,
+      limits: {
+        maxPeriodsPerDay?: number
+        minConsecutivePeriods?: number
+        maxConsecutivePeriods?: number
+      },
+    ): boolean {
+      const teacher = this.teacherById(teacherId)
+      if (!teacher) return false
+      const { maxPeriodsPerDay, minConsecutivePeriods, maxConsecutivePeriods } = limits
+      const isPositiveIntOrUndefined = (v?: number) =>
+        v === undefined || (Number.isInteger(v) && v >= 1)
+      if (
+        !isPositiveIntOrUndefined(maxPeriodsPerDay) ||
+        !isPositiveIntOrUndefined(minConsecutivePeriods) ||
+        !isPositiveIntOrUndefined(maxConsecutivePeriods)
+      ) {
+        return false
+      }
+      if (
+        minConsecutivePeriods !== undefined &&
+        maxConsecutivePeriods !== undefined &&
+        minConsecutivePeriods > maxConsecutivePeriods
+      ) {
+        return false
+      }
+      teacher.maxPeriodsPerDay = maxPeriodsPerDay
+      teacher.minConsecutivePeriods = minConsecutivePeriods
+      teacher.maxConsecutivePeriods = maxConsecutivePeriods
+      return true
+    },
+
+    /** FR-8/9/10/12. At most one Assignment per (Class, Subject) pair — returns undefined if one already exists. */
+    addAssignment(classId: string, subjectId: string): string | undefined {
+      if (!this.classById(classId) || !this.subjectById(subjectId)) return undefined
+      if (this.assignmentByClassSubject(classId, subjectId)) return undefined
+      const assignment: Assignment = {
+        id: crypto.randomUUID(),
+        classId,
+        subjectId,
+        teacherIds: [],
+        weeklyOccurrences: 1,
+        consecutivePeriods: 1,
+        allowSameDayRepetition: false,
+      }
+      this.assignments.push(assignment)
+      return assignment.id
+    },
+
+    removeAssignment(id: string): void {
+      this.assignments = this.assignments.filter((a) => a.id !== id)
+    },
+
+    setWeeklyOccurrences(id: string, weeklyOccurrences: number): boolean {
+      const assignment = this.assignmentById(id)
+      if (!assignment || !Number.isInteger(weeklyOccurrences) || weeklyOccurrences < 1) return false
+      assignment.weeklyOccurrences = weeklyOccurrences
+      return true
+    },
+
+    /** FR-10: 1 (no block), 2 (double), or 3 (triple) — the hard 3-period ceiling is enforced here. */
+    setConsecutivePeriods(id: string, consecutivePeriods: number): boolean {
+      const assignment = this.assignmentById(id)
+      if (
+        !assignment ||
+        !Number.isInteger(consecutivePeriods) ||
+        consecutivePeriods < 1 ||
+        consecutivePeriods > MAX_CONSECUTIVE_PERIODS
+      ) {
+        return false
+      }
+      assignment.consecutivePeriods = consecutivePeriods
+      return true
+    },
+
+    setAllowSameDayRepetition(id: string, allow: boolean): void {
+      const assignment = this.assignmentById(id)
+      if (assignment) assignment.allowSameDayRepetition = allow
+    },
+
+    addAssignmentTeacher(assignmentId: string, teacherId: string): boolean {
+      const assignment = this.assignmentById(assignmentId)
+      if (!assignment || !this.teacherById(teacherId)) return false
+      if (assignment.teacherIds.includes(teacherId)) return false
+      assignment.teacherIds.push(teacherId)
+      return true
+    },
+
+    removeAssignmentTeacher(assignmentId: string, teacherId: string): void {
+      const assignment = this.assignmentById(assignmentId)
+      if (!assignment) return
+      assignment.teacherIds = assignment.teacherIds.filter((id) => id !== teacherId)
     },
   },
 })

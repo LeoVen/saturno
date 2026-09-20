@@ -312,3 +312,234 @@ describe('entities store — Teacher Availability', () => {
     expect(store.teacherById(teacherId)?.unavailability).toHaveLength(0)
   })
 })
+
+describe('entities store — Teacher limits (FR-11)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('sets and clears optional per-Teacher limits', () => {
+    const store = useEntitiesStore()
+    const id = store.addTeacher('Guilherme')
+
+    expect(
+      store.setTeacherLimits(id, {
+        maxPeriodsPerDay: 6,
+        minConsecutivePeriods: 2,
+        maxConsecutivePeriods: 4,
+      }),
+    ).toBe(true)
+    expect(store.teacherById(id)).toMatchObject({
+      maxPeriodsPerDay: 6,
+      minConsecutivePeriods: 2,
+      maxConsecutivePeriods: 4,
+    })
+
+    expect(store.setTeacherLimits(id, {})).toBe(true)
+    expect(store.teacherById(id)?.maxPeriodsPerDay).toBeUndefined()
+  })
+
+  it('rejects a non-positive-integer limit', () => {
+    const store = useEntitiesStore()
+    const id = store.addTeacher('Guilherme')
+    expect(store.setTeacherLimits(id, { maxPeriodsPerDay: 0 })).toBe(false)
+    expect(store.setTeacherLimits(id, { maxPeriodsPerDay: 1.5 })).toBe(false)
+  })
+
+  it('rejects min consecutive periods greater than max', () => {
+    const store = useEntitiesStore()
+    const id = store.addTeacher('Guilherme')
+    expect(store.setTeacherLimits(id, { minConsecutivePeriods: 5, maxConsecutivePeriods: 2 })).toBe(
+      false,
+    )
+  })
+})
+
+function setUpSegmentWithClass(store: ReturnType<typeof useEntitiesStore>, periods: number) {
+  const segmentId = store.addSegment('Ensino Fundamental')
+  for (let i = 0; i < periods; i++) {
+    const h = String(8 + i).padStart(2, '0')
+    const h2 = String(9 + i).padStart(2, '0')
+    store.addTimeSlot(segmentId, `${h}:00`, `${h2}:00`)
+  }
+  const gradeId = store.addGrade(segmentId, '7º Ano') as string
+  const classId = store.addClass(gradeId, '7º Ano A') as string
+  return { segmentId, gradeId, classId }
+}
+
+describe('entities store — Assignments (FR-8/9/10/12)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('creates an Assignment with sane defaults and enforces one per (Class, Subject)', () => {
+    const store = useEntitiesStore()
+    const { classId } = setUpSegmentWithClass(store, 1)
+    const subjectId = store.addSubject('História')
+
+    const id = store.addAssignment(classId, subjectId) as string
+    expect(store.assignmentById(id)).toMatchObject({
+      classId,
+      subjectId,
+      teacherIds: [],
+      weeklyOccurrences: 1,
+      consecutivePeriods: 1,
+      allowSameDayRepetition: false,
+    })
+
+    expect(store.addAssignment(classId, subjectId)).toBeUndefined()
+    expect(store.assignmentsByClass(classId)).toHaveLength(1)
+  })
+
+  it('rejects an Assignment for a nonexistent Class or Subject', () => {
+    const store = useEntitiesStore()
+    const { classId } = setUpSegmentWithClass(store, 1)
+    const subjectId = store.addSubject('História')
+
+    expect(store.addAssignment('nope', subjectId)).toBeUndefined()
+    expect(store.addAssignment(classId, 'nope')).toBeUndefined()
+  })
+
+  it('sets weekly occurrences, rejecting non-positive-integer counts', () => {
+    const store = useEntitiesStore()
+    const { classId } = setUpSegmentWithClass(store, 1)
+    const subjectId = store.addSubject('História')
+    const id = store.addAssignment(classId, subjectId) as string
+
+    expect(store.setWeeklyOccurrences(id, 4)).toBe(true)
+    expect(store.assignmentById(id)?.weeklyOccurrences).toBe(4)
+    expect(store.setWeeklyOccurrences(id, 0)).toBe(false)
+  })
+
+  it('enforces the hard 3-period consecutive ceiling (FR-10)', () => {
+    const store = useEntitiesStore()
+    const { classId } = setUpSegmentWithClass(store, 1)
+    const subjectId = store.addSubject('Educação Física')
+    const id = store.addAssignment(classId, subjectId) as string
+
+    expect(store.setConsecutivePeriods(id, 3)).toBe(true)
+    expect(store.setConsecutivePeriods(id, 4)).toBe(false)
+    expect(store.assignmentById(id)?.consecutivePeriods).toBe(3)
+  })
+
+  it('toggles the same-day repetition override (FR-12)', () => {
+    const store = useEntitiesStore()
+    const { classId } = setUpSegmentWithClass(store, 1)
+    const subjectId = store.addSubject('Matemática')
+    const id = store.addAssignment(classId, subjectId) as string
+
+    expect(store.assignmentById(id)?.allowSameDayRepetition).toBe(false)
+    store.setAllowSameDayRepetition(id, true)
+    expect(store.assignmentById(id)?.allowSameDayRepetition).toBe(true)
+  })
+
+  it('adds and removes Teachers from an Assignment, rejecting duplicates and unknown Teachers', () => {
+    const store = useEntitiesStore()
+    const { classId } = setUpSegmentWithClass(store, 1)
+    const subjectId = store.addSubject('Matemática')
+    const assignmentId = store.addAssignment(classId, subjectId) as string
+    const teacherId = store.addTeacher('Guilherme')
+
+    expect(store.addAssignmentTeacher(assignmentId, teacherId)).toBe(true)
+    expect(store.addAssignmentTeacher(assignmentId, teacherId)).toBe(false)
+    expect(store.addAssignmentTeacher(assignmentId, 'nope')).toBe(false)
+    expect(store.assignmentById(assignmentId)?.teacherIds).toEqual([teacherId])
+
+    store.removeAssignmentTeacher(assignmentId, teacherId)
+    expect(store.assignmentById(assignmentId)?.teacherIds).toEqual([])
+  })
+
+  it('cascades: removing a Class, Subject, Segment, or Grade removes its Assignments', () => {
+    const store = useEntitiesStore()
+    const { classId: c1 } = setUpSegmentWithClass(store, 1)
+    const subjectId = store.addSubject('Matemática')
+    store.addAssignment(c1, subjectId)
+    expect(store.assignments).toHaveLength(1)
+    store.removeClass(c1)
+    expect(store.assignments).toHaveLength(0)
+
+    const { classId: c2 } = setUpSegmentWithClass(store, 1)
+    store.addAssignment(c2, subjectId)
+    store.removeSubject(subjectId)
+    expect(store.assignments).toHaveLength(0)
+
+    const subjectId2 = store.addSubject('Geografia')
+    const { segmentId: seg3, classId: c3 } = setUpSegmentWithClass(store, 1)
+    store.addAssignment(c3, subjectId2)
+    store.removeSegment(seg3)
+    expect(store.assignments).toHaveLength(0)
+
+    const subjectId3 = store.addSubject('Ciências')
+    const { gradeId: g4, classId: c4 } = setUpSegmentWithClass(store, 1)
+    store.addAssignment(c4, subjectId3)
+    store.removeGrade(g4)
+    expect(store.assignments).toHaveLength(0)
+  })
+
+  it('removing a Teacher unlinks it from Assignments without deleting them', () => {
+    const store = useEntitiesStore()
+    const { classId } = setUpSegmentWithClass(store, 1)
+    const subjectId = store.addSubject('Matemática')
+    const assignmentId = store.addAssignment(classId, subjectId) as string
+    const teacherId = store.addTeacher('Guilherme')
+    store.addAssignmentTeacher(assignmentId, teacherId)
+
+    store.removeTeacher(teacherId)
+
+    expect(store.assignments).toHaveLength(1)
+    expect(store.assignmentById(assignmentId)?.teacherIds).toEqual([])
+  })
+})
+
+describe('entities store — FR-13 validation getters', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('flags an overloaded Class', () => {
+    const store = useEntitiesStore()
+    const { classId } = setUpSegmentWithClass(store, 2) // 2 slots/day * 5 days = 10 available/week
+    const subjectId = store.addSubject('Matemática')
+    const id = store.addAssignment(classId, subjectId) as string
+    store.setWeeklyOccurrences(id, 12)
+
+    expect(store.overloadedClasses).toEqual([{ classId, requiredWeekly: 12, availableWeekly: 10 }])
+  })
+
+  it('does not flag a Class within capacity', () => {
+    const store = useEntitiesStore()
+    const { classId } = setUpSegmentWithClass(store, 2)
+    const subjectId = store.addSubject('Matemática')
+    const id = store.addAssignment(classId, subjectId) as string
+    store.setWeeklyOccurrences(id, 5)
+
+    expect(store.overloadedClasses).toEqual([])
+  })
+
+  it('flags an Assignment whose Teacher has zero overlapping availability', () => {
+    const store = useEntitiesStore()
+    const { classId } = setUpSegmentWithClass(store, 1) // single 08:00-09:00 slot, every weekday
+    const subjectId = store.addSubject('Matemática')
+    const assignmentId = store.addAssignment(classId, subjectId) as string
+    const teacherId = store.addTeacher('Guilherme')
+    store.addAssignmentTeacher(assignmentId, teacherId)
+    // Blocks the entire 08:00-09:00 slot on every weekday.
+    for (const day of ['mon', 'tue', 'wed', 'thu', 'fri'] as const) {
+      store.addUnavailability(teacherId, day, '07:00', '12:00')
+    }
+
+    expect(store.zeroOverlapAssignments).toEqual([{ assignmentId, teacherId, classId }])
+  })
+
+  it('does not flag an Assignment whose Teacher has some overlapping availability', () => {
+    const store = useEntitiesStore()
+    const { classId } = setUpSegmentWithClass(store, 1)
+    const subjectId = store.addSubject('Matemática')
+    const assignmentId = store.addAssignment(classId, subjectId) as string
+    const teacherId = store.addTeacher('Guilherme')
+    store.addAssignmentTeacher(assignmentId, teacherId)
+    store.addUnavailability(teacherId, 'mon', '07:00', '12:00')
+
+    expect(store.zeroOverlapAssignments).toEqual([])
+  })
+})
