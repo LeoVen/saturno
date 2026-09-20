@@ -74,4 +74,16 @@ Template for a new entry:
 
 ---
 
+## D-06 — Custom domain: saturno.leoven.dev
+
+- **Date**: 2026-09-20
+- **Type**: Clarification (TR-17 already anticipated this exact case: "...unless a custom domain is configured later")
+- **Spec refs**: TR-17
+- **What changes**: the app is served at `https://saturno.leoven.dev` (user-owned DNS, CNAME record already pointing at `leoven.github.io`, confirmed resolving) instead of the GitHub Pages project-page subpath. Concretely: Vite's `base` is now `/` (was `/saturno/`); `app/public/CNAME` (containing `saturno.leoven.dev`) is committed so it ships in every build and GitHub Pages picks it up; the repo's Pages `cname` setting was also set directly via `gh api -X PUT repos/LeoVen/saturno/pages -f cname=saturno.leoven.dev`.
+- **Why**: user-requested, and the exact scenario TR-17's own wording already carved out — not a deviation from what was specified, just resolving the "unless" clause.
+- **Note**: right after setting the custom domain, GitHub reported `https_enforced: false` — HTTPS enforcement typically activates once GitHub finishes provisioning the certificate for the new domain (can take up to ~24h). Worth checking back (`gh api repos/LeoVen/saturno/pages`) and turning enforcement on once `status` shows the domain verified, rather than assuming it's already secure.
+- **Affected epics/tasks**: E01 (E01-T4's base-path config, E01-T5's deploy pipeline — the artifact must keep including `CNAME` on every build).
+
+---
+
 *(entries above are the most recent)*

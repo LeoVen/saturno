@@ -15,4 +15,4 @@ from configured entities and constraints.
 - **`sheets/`** — real sample timetables used as ground truth while writing
   the spec.
 
-Deployed via GitHub Pages: https://leoven.github.io/saturno/
+Deployed via GitHub Pages: https://saturno.leoven.dev
