@@ -22,6 +22,7 @@ import {
   findZeroOverlapAssignments,
 } from '../entities/validation'
 import type { AssignmentAvailabilityCheck, ClassLoad } from '../entities/validation'
+import { moveItem, type MoveDirection } from '../entities/reorder'
 
 /**
  * The entities store (IMPL.md §7): source of truth for school configuration,
@@ -270,6 +271,11 @@ export const useEntitiesStore = defineStore('entities', {
       }
     },
 
+    /** Subjects have no natural sort key (unlike Time Slots/Breaks, D-07) — the user orders them by hand. */
+    moveSubject(id: string, direction: MoveDirection): void {
+      this.subjects = moveItem(this.subjects, id, direction)
+    },
+
     addTeacher(name: string): string {
       // FR-2: names are intentionally not deduplicated/validated for
       // uniqueness — two Teachers may share a name and are distinct
@@ -291,6 +297,11 @@ export const useEntitiesStore = defineStore('entities', {
       for (const assignment of this.assignments) {
         assignment.teacherIds = assignment.teacherIds.filter((tid) => tid !== id)
       }
+    },
+
+    /** Teachers have no natural sort key (unlike Time Slots/Breaks, D-07) — the user orders them by hand. */
+    moveTeacher(id: string, direction: MoveDirection): void {
+      this.teachers = moveItem(this.teachers, id, direction)
     },
 
     /**

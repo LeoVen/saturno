@@ -101,7 +101,25 @@ function toggleCell(weekday: Weekday, rowKey: string): void {
 
   <div class="card">
     <ul class="pill-list">
-      <li v-for="teacher in store.teachers" :key="teacher.id">
+      <li v-for="(teacher, index) in store.teachers" :key="teacher.id">
+        <button
+          type="button"
+          class="btn btn-sm"
+          :disabled="index === 0"
+          aria-label="Mover para cima"
+          @click="store.moveTeacher(teacher.id, 'up')"
+        >
+          ▲
+        </button>
+        <button
+          type="button"
+          class="btn btn-sm"
+          :disabled="index === store.teachers.length - 1"
+          aria-label="Mover para baixo"
+          @click="store.moveTeacher(teacher.id, 'down')"
+        >
+          ▼
+        </button>
         <button
           type="button"
           class="pill"

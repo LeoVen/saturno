@@ -349,4 +349,23 @@ Template for a new entry:
   and E05 (`AssignmentsConfig.vue`'s Teacher picker) — both already `done`;
   this is a retrofit, not a reopening of either epic's own checkpoint.
 
+## D-26 — Manual reordering for Teachers and Subjects (up/down, no drag-and-drop)
+
+- **Date**: 2026-09-20
+- **Type**: Implementation-only
+- **Spec refs**: FR-2, FR-7
+- **What changes**: the Teachers and Subjects lists gain "▲"/"▼" buttons to
+  move an entry one position at a time; the store's `teachers`/`subjects`
+  array order (already what every list/dropdown renders in) is the
+  persisted order. Backed by a pure `moveItem` helper
+  (`app/src/entities/reorder.ts`, TR-11 pattern) shared by both.
+- **Why**: user-requested. Contrast with D-07 (Time Slots/Breaks are
+  auto-sorted chronologically, no manual reorder): Teachers and Subjects
+  have no natural sort key, so there's no chronological order to derive —
+  manual positioning is the only option, and up/down buttons avoid adding
+  a drag-and-drop dependency for a two-list, occasional-use feature.
+- **Affected epics/tasks**: E04 (`TeachersConfig.vue`), E03
+  (`SubjectsConfig.vue`) — both already `done`; a retrofit, not a
+  reopening of either epic's checkpoint.
+
 *(entries above are the most recent)*

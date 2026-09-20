@@ -68,3 +68,5 @@ solver ultimately builds a schedule for.
   Human Verification steps and flips them to `done`.
 - **Human verification confirmed** (2026-09-20): user reviewed and signed
   off ("looks good to me"). E03-T6 and the epic moved to `done`.
+- **Retrofit** (2026-09-20): the Subjects list gained manual up/down
+  reordering — see [D-26](../DECISIONS.md).

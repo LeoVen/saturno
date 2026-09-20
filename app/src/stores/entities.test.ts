@@ -212,6 +212,25 @@ describe('entities store — Subjects', () => {
     store.removeSubject(id)
     expect(store.subjects).toHaveLength(0)
   })
+
+  it('reorders Subjects (no natural sort key, unlike Time Slots/Breaks)', () => {
+    const store = useEntitiesStore()
+    const a = store.addSubject('A')
+    const b = store.addSubject('B')
+    const c = store.addSubject('C')
+
+    store.moveSubject(b, 'up')
+    expect(store.subjects.map((s) => s.id)).toEqual([b, a, c])
+
+    store.moveSubject(b, 'down')
+    store.moveSubject(b, 'down')
+    expect(store.subjects.map((s) => s.id)).toEqual([a, c, b])
+
+    // No-ops at the boundaries.
+    store.moveSubject(a, 'up')
+    store.moveSubject(b, 'down')
+    expect(store.subjects.map((s) => s.id)).toEqual([a, c, b])
+  })
 })
 
 describe('entities store — Teachers', () => {
@@ -251,6 +270,20 @@ describe('entities store — Teachers', () => {
     const store = useEntitiesStore()
     const id = store.addTeacher('Guilherme')
     expect(store.teacherById(id)?.subjectIds).toEqual([])
+  })
+
+  it('reorders Teachers (no natural sort key, unlike Time Slots/Breaks)', () => {
+    const store = useEntitiesStore()
+    const a = store.addTeacher('Ana')
+    const b = store.addTeacher('Bruno')
+    const c = store.addTeacher('Carla')
+
+    store.moveTeacher(c, 'up')
+    expect(store.teachers.map((t) => t.id)).toEqual([a, c, b])
+
+    // No-op moving the first item further up.
+    store.moveTeacher(a, 'up')
+    expect(store.teachers.map((t) => t.id)).toEqual([a, c, b])
   })
 })
 

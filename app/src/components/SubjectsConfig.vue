@@ -23,7 +23,25 @@ function renameSubject(id: string, event: Event): void {
 
   <div class="card">
     <ul class="pill-list">
-      <li v-for="subject in store.subjects" :key="subject.id">
+      <li v-for="(subject, index) in store.subjects" :key="subject.id">
+        <button
+          type="button"
+          class="btn btn-sm"
+          :disabled="index === 0"
+          aria-label="Mover para cima"
+          @click="store.moveSubject(subject.id, 'up')"
+        >
+          ▲
+        </button>
+        <button
+          type="button"
+          class="btn btn-sm"
+          :disabled="index === store.subjects.length - 1"
+          aria-label="Mover para baixo"
+          @click="store.moveSubject(subject.id, 'down')"
+        >
+          ▼
+        </button>
         <input
           class="input"
           type="text"
