@@ -36,10 +36,10 @@ Web Worker) is proven early instead of assumed.
 | E01-T2 | Scaffold Rust crate + `wasm-pack` build; wire a minimal exported function callable from a Web Worker end-to-end (toolchain spike, de-risks IMPL.md §10's Rust/WASM concern before real solver work) | in-review |
 | E01-T3 | Pinia store skeleton + IndexedDB wrapper (`idb`) with hydrate-on-load / write-through plumbing — no real entities yet | in-review |
 | E01-T4 | Configure Vite `base` for the GitHub Pages project-page subpath (TR-17) | done |
-| E01-T5 | GitHub Actions workflow: Node + Rust toolchains, `wasm-pack build`, Vite build, publish to GitHub Pages (TR-18) | in-review |
+| E01-T5 | GitHub Actions workflow: Node + Rust toolchains, `wasm-pack build`, Vite build, publish to GitHub Pages (TR-18) | done |
 | E01-T6 | Set up a unit-test runner for solver-adjacent pure functions (TR-11) — the pattern later epics' solver work will follow | done |
 | E01-T7 | Linting/formatting: ESLint+Prettier (TS/Vue), rustfmt+clippy (Rust) — establishes the baseline every later epic's code follows | done |
-| E01-T8 | CI: run lint + unit tests on every push, gating the deploy step so it only publishes on green (extends E01-T5) | in-review |
+| E01-T8 | CI: run lint + unit tests on every push, gating the deploy step so it only publishes on green (extends E01-T5) | done |
 | E01-T9 | Enable GitHub Pages for the repo (Settings → Pages → Source: "GitHub Actions", or `gh api -X POST repos/LeoVen/saturno/pages -F build_type=workflow`) — one-time repo setting; currently **not enabled** (confirmed via `gh api repos/LeoVen/saturno/pages` → 404) | done |
 
 ## Decisions
@@ -52,4 +52,5 @@ Web Worker) is proven early instead of assumed.
 
 - **pt-BR without an i18n framework**: App.vue's scaffolding-check text is written directly in pt-BR (no translation framework) — the same approach earlier notes here proposed. Not yet formally logged as a Decision since E01's UI text is throwaway scaffolding, not a real screen; log it for real once E02 writes the first actual pt-BR user interface.
 - `wasm-pack` (v0.15.0) is installed locally via `cargo install wasm-pack --locked`, not committed to the repo (it's a global cargo tool, not a project dependency) — CI installs it the same way (see the `build-deploy` job).
-- Verification performed so far is **automated only** (build/lint/format/test green locally, `vite preview` served the production build under `/saturno/` correctly, WASM/Worker assets returned 200 with the right content-type via `curl`). The epic's Human Verification steps 1, 4, 5, 6 still need a human in a real browser / a real push to `main` — no browser tool was available to actually click the on-screen buttons.
+- **2026-09-20, first real push (commit `d6c153f`)**: the `lint-test` job passed, gated `build-deploy`, which built and deployed successfully — confirms Human Verification steps 1, 3, and 6 (CI gate structurally proven; the deliberate-failure half of step 6 wasn't separately tested, but the gate mechanism ran for real). The live site (`https://leoven.github.io/saturno/`) was checked via `curl`: root HTML, JS, CSS, and the `.wasm` asset (correct `application/wasm` content-type) all return 200 with the right `/saturno/`-prefixed paths.
+- Steps 4 and 5 (seeing the ping result and the persistence round-trip actually render on screen) still need a human to open the live URL in a real browser — no browser tool is available in this environment to click the buttons or read `console`/DOM output. E01-T2/T3 stay `in-review` until that happens.
