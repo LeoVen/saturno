@@ -86,6 +86,47 @@ function zeroOverlapMessage(assignmentId: string, teacherId: string, classId: st
   const subjectId = store.assignmentById(assignmentId)?.subjectId
   return `${store.teacherLabel(teacherId)}: nenhum horário disponível compatível com ${classLabel(classId)}${subjectId ? ` para a disciplina ${subjectLabel(subjectId)}` : ''}.`
 }
+
+// Bulk-copy: mirror one Class's whole Assignment config (weekly load,
+// consecutive-periods block, same-day override, Teachers) onto another —
+// e.g. two parallel sections of the same Grade needing the same Subjects.
+const copySourceClassId = ref('')
+const copyTargetClassId = ref('')
+const copyResult = ref<{ copied: number; skipped: number } | null>(null)
+
+function copyAssignments(): void {
+  if (!copySourceClassId.value || !copyTargetClassId.value) return
+  copyResult.value = store.copyAssignments(copySourceClassId.value, copyTargetClassId.value)
+}
+
+function copyResultMessage(result: { copied: number; skipped: number }): string {
+  const parts = [`${result.copied} atribuição(ões) copiada(s)`]
+  if (result.skipped > 0) {
+    parts.push(`${result.skipped} ignorada(s) por já existir na turma de destino`)
+  }
+  return `${parts.join(', ')}.`
+}
+
+// Filters for the "Atribuições cadastradas" table — it grows with the
+// school's real size, so narrowing it by Turma/Disciplina keeps it usable.
+const filterClassId = ref('')
+const filterSubjectId = ref('')
+
+const filteredAssignments = computed(() =>
+  store.assignments.filter(
+    (a) =>
+      (!filterClassId.value || a.classId === filterClassId.value) &&
+      (!filterSubjectId.value || a.subjectId === filterSubjectId.value),
+  ),
+)
+
+// Weekly-load summary: lets the user sanity-check total input at a glance,
+// sorted the same way every other Class listing in the app is.
+const classLoadRows = computed(() =>
+  [...store.classLoads]
+    .map((load) => ({ ...load, label: classLabel(load.classId) }))
+    .sort((a, b) => a.label.localeCompare(b.label)),
+)
 </script>
 
 <template>
@@ -176,8 +217,90 @@ function zeroOverlapMessage(assignmentId: string, teacherId: string, classId: st
     </div>
   </div>
 
+  <div v-if="allClasses.length > 1" class="card">
+    <h3>Copiar atribuições entre turmas</h3>
+    <p class="muted">
+      Copia toda a configuração (aulas/semana, períodos consecutivos, repetição no mesmo dia e
+      professores) de uma turma para outra. Disciplinas já configuradas na turma de destino não são
+      substituídas.
+    </p>
+    <div class="row">
+      <label class="field">
+        <span class="field-label">De</span>
+        <select v-model="copySourceClassId" class="input">
+          <option value="" disabled>Selecione…</option>
+          <option v-for="c in allClasses" :key="c.id" :value="c.id">{{ c.label }}</option>
+        </select>
+      </label>
+      <label class="field">
+        <span class="field-label">Para</span>
+        <select v-model="copyTargetClassId" class="input">
+          <option value="" disabled>Selecione…</option>
+          <option
+            v-for="c in allClasses"
+            :key="c.id"
+            :value="c.id"
+            :disabled="c.id === copySourceClassId"
+          >
+            {{ c.label }}
+          </option>
+        </select>
+      </label>
+      <button
+        type="button"
+        class="btn btn-primary"
+        :disabled="
+          !copySourceClassId || !copyTargetClassId || copySourceClassId === copyTargetClassId
+        "
+        @click="copyAssignments"
+      >
+        Copiar
+      </button>
+    </div>
+    <p v-if="copyResult" class="muted">{{ copyResultMessage(copyResult) }}</p>
+  </div>
+
+  <div v-if="classLoadRows.length" class="card">
+    <h3>Total de aulas por semana</h3>
+    <p class="muted">Some aqui para conferir se a carga horária de cada turma está completa.</p>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Turma</th>
+          <th>Aulas/semana</th>
+          <th>Períodos disponíveis</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="row in classLoadRows" :key="row.classId">
+          <td>{{ row.label }}</td>
+          <td :class="{ overloaded: row.requiredWeekly > row.availableWeekly }">
+            {{ row.requiredWeekly }}
+          </td>
+          <td>{{ row.availableWeekly }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
   <div v-if="store.assignments.length" class="card">
     <h3>Atribuições cadastradas</h3>
+    <div class="row" style="margin-bottom: var(--space-3)">
+      <label class="field">
+        <span class="field-label">Filtrar por turma</span>
+        <select v-model="filterClassId" class="input">
+          <option value="">Todas</option>
+          <option v-for="c in allClasses" :key="c.id" :value="c.id">{{ c.label }}</option>
+        </select>
+      </label>
+      <label class="field">
+        <span class="field-label">Filtrar por disciplina</span>
+        <select v-model="filterSubjectId" class="input">
+          <option value="">Todas</option>
+          <option v-for="s in store.subjects" :key="s.id" :value="s.id">{{ s.name }}</option>
+        </select>
+      </label>
+    </div>
     <table class="table">
       <thead>
         <tr>
@@ -190,7 +313,7 @@ function zeroOverlapMessage(assignmentId: string, teacherId: string, classId: st
         </tr>
       </thead>
       <tbody>
-        <tr v-for="a in store.assignments" :key="a.id">
+        <tr v-for="a in filteredAssignments" :key="a.id">
           <td>{{ classLabel(a.classId) }}</td>
           <td>{{ subjectLabel(a.subjectId) }}</td>
           <td>{{ a.weeklyOccurrences }}</td>
@@ -208,6 +331,9 @@ function zeroOverlapMessage(assignmentId: string, teacherId: string, classId: st
         </tr>
       </tbody>
     </table>
+    <p v-if="!filteredAssignments.length" class="empty">
+      Nenhuma atribuição encontrada com esses filtros.
+    </p>
   </div>
 
   <div v-if="store.overloadedClasses.length || store.zeroOverlapAssignments.length" class="card">
@@ -248,5 +374,10 @@ fieldset {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
+}
+
+.overloaded {
+  color: var(--color-danger);
+  font-weight: 600;
 }
 </style>

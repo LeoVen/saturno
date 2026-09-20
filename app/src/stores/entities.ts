@@ -117,9 +117,14 @@ export const useEntitiesStore = defineStore('entities', {
         return allWeeklyPeriods(segment?.timeSlots ?? [])
       }
     },
-    /** FR-13: Classes whose total weekly required occurrences exceed their Segment's available periods. */
-    overloadedClasses(): ClassLoad[] {
-      const loads: ClassLoad[] = this.classes.map((c) => ({
+    /**
+     * Every Class's current weekly load: total Assignment occurrences vs.
+     * its Segment's available periods — the same figures FR-13's overload
+     * check compares, surfaced for every Class (not just overloaded ones)
+     * so the Assignments screen can show a sanity-check summary.
+     */
+    classLoads(): ClassLoad[] {
+      return this.classes.map((c) => ({
         classId: c.id,
         requiredWeekly: this.assignmentsByClass(c.id).reduce(
           (sum, a) => sum + a.weeklyOccurrences,
@@ -127,7 +132,10 @@ export const useEntitiesStore = defineStore('entities', {
         ),
         availableWeekly: this.classWeeklyPeriods(c.id).length,
       }))
-      return findOverloadedClasses(loads)
+    },
+    /** FR-13: Classes whose total weekly required occurrences exceed their Segment's available periods. */
+    overloadedClasses(): ClassLoad[] {
+      return findOverloadedClasses(this.classLoads)
     },
     /** FR-13: Assignments whose Teacher has zero overlapping availability with the Class's periods. */
     zeroOverlapAssignments() {
@@ -447,6 +455,41 @@ export const useEntitiesStore = defineStore('entities', {
 
     removeAssignment(id: string): void {
       this.assignments = this.assignments.filter((a) => a.id !== id)
+    },
+
+    /**
+     * Copies every Assignment from `sourceClassId` to `targetClassId` — the
+     * full config (weekly occurrences, consecutive-periods block, same-day
+     * override, Teachers), not just the (Class, Subject) link. A Subject
+     * already configured on the target is left untouched (skipped, not
+     * overwritten) so an existing target config is never silently
+     * clobbered by a copy.
+     */
+    copyAssignments(
+      sourceClassId: string,
+      targetClassId: string,
+    ): { copied: number; skipped: number } {
+      if (sourceClassId === targetClassId) return { copied: 0, skipped: 0 }
+      let copied = 0
+      let skipped = 0
+      for (const source of this.assignmentsByClass(sourceClassId)) {
+        if (this.assignmentByClassSubject(targetClassId, source.subjectId)) {
+          skipped++
+          continue
+        }
+        const newId = this.addAssignment(targetClassId, source.subjectId)
+        const created = newId ? this.assignmentById(newId) : undefined
+        if (!created) {
+          skipped++
+          continue
+        }
+        created.weeklyOccurrences = source.weeklyOccurrences
+        created.consecutivePeriods = source.consecutivePeriods
+        created.allowSameDayRepetition = source.allowSameDayRepetition
+        created.teacherIds = [...source.teacherIds]
+        copied++
+      }
+      return { copied, skipped }
     },
 
     setWeeklyOccurrences(id: string, weeklyOccurrences: number): boolean {

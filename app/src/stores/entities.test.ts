@@ -688,6 +688,57 @@ describe('entities store — Assignments (FR-8/9/10/12)', () => {
     expect(store.assignments).toHaveLength(1)
     expect(store.assignmentById(assignmentId)?.teacherIds).toEqual([])
   })
+
+  it('copies every field of a source Class Assignment onto another Class', () => {
+    const store = useEntitiesStore()
+    const { gradeId, classId: source } = setUpSegmentWithClass(store, 2)
+    const target = store.addClass(gradeId, '7º Ano B') as string
+    const subjectId = store.addSubject('Matemática')
+    const teacherId = store.addTeacher('Guilherme')
+    const sourceAssignmentId = store.addAssignment(source, subjectId) as string
+    store.setWeeklyOccurrences(sourceAssignmentId, 4)
+    store.setConsecutivePeriods(sourceAssignmentId, 2)
+    store.setAllowSameDayRepetition(sourceAssignmentId, true)
+    store.addAssignmentTeacher(sourceAssignmentId, teacherId)
+
+    const result = store.copyAssignments(source, target)
+    expect(result).toEqual({ copied: 1, skipped: 0 })
+
+    const copied = store.assignmentByClassSubject(target, subjectId)
+    expect(copied).toMatchObject({
+      weeklyOccurrences: 4,
+      consecutivePeriods: 2,
+      allowSameDayRepetition: true,
+      teacherIds: [teacherId],
+    })
+    // Independent copy: editing the source afterward must not affect the target.
+    store.setWeeklyOccurrences(sourceAssignmentId, 1)
+    expect(store.assignmentByClassSubject(target, subjectId)?.weeklyOccurrences).toBe(4)
+  })
+
+  it('skips a Subject already configured on the target Class rather than overwriting it', () => {
+    const store = useEntitiesStore()
+    const { gradeId, classId: source } = setUpSegmentWithClass(store, 2)
+    const target = store.addClass(gradeId, '7º Ano B') as string
+    const subjectId = store.addSubject('Matemática')
+    store.addAssignment(source, subjectId)
+    const targetAssignmentId = store.addAssignment(target, subjectId) as string
+    store.setWeeklyOccurrences(targetAssignmentId, 9)
+
+    const result = store.copyAssignments(source, target)
+    expect(result).toEqual({ copied: 0, skipped: 1 })
+    expect(store.assignmentByClassSubject(target, subjectId)?.weeklyOccurrences).toBe(9)
+  })
+
+  it('is a no-op copying a Class onto itself', () => {
+    const store = useEntitiesStore()
+    const { classId } = setUpSegmentWithClass(store, 1)
+    const subjectId = store.addSubject('Matemática')
+    store.addAssignment(classId, subjectId)
+
+    expect(store.copyAssignments(classId, classId)).toEqual({ copied: 0, skipped: 0 })
+    expect(store.assignments).toHaveLength(1)
+  })
 })
 
 describe('entities store — FR-13 validation getters', () => {
@@ -713,6 +764,16 @@ describe('entities store — FR-13 validation getters', () => {
     store.setWeeklyOccurrences(id, 5)
 
     expect(store.overloadedClasses).toEqual([])
+  })
+
+  it('classLoads reports every Class, not just overloaded ones', () => {
+    const store = useEntitiesStore()
+    const { classId } = setUpSegmentWithClass(store, 2)
+    const subjectId = store.addSubject('Matemática')
+    const id = store.addAssignment(classId, subjectId) as string
+    store.setWeeklyOccurrences(id, 5)
+
+    expect(store.classLoads).toEqual([{ classId, requiredWeekly: 5, availableWeekly: 10 }])
   })
 
   it('flags an Assignment whose Teacher has zero overlapping availability', () => {

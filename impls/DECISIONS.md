@@ -368,4 +368,29 @@ Template for a new entry:
   (`SubjectsConfig.vue`) — both already `done`; a retrofit, not a
   reopening of either epic's checkpoint.
 
+## D-27 — Assignments screen: bulk-copy between Classes, table filters, weekly-load summary
+
+- **Date**: 2026-09-20
+- **Type**: Implementation-only
+- **Spec refs**: FR-8, FR-9
+- **What changes**: three additions to the Assignments screen, all
+  user-requested as the school's data grows: (1) "Copiar atribuições entre
+  turmas" — copies every field of a source Class's Assignments (weekly
+  occurrences, consecutive-periods block, same-day override, Teachers)
+  onto a target Class; a Subject already configured on the target is
+  skipped, never overwritten. (2) Turma/Disciplina filters on the
+  "Atribuições cadastradas" table. (3) "Total de aulas por semana" — every
+  Class's current weekly load vs. its Segment's available periods (the
+  same figures FR-13's overload check already computes, now surfaced for
+  every Class via a new `classLoads` getter, not just overloaded ones), so
+  the user can sanity-check their own data entry.
+- **Why**: user-requested — with many Classes/Subjects, re-entering
+  identical config for parallel sections is tedious, the flat table gets
+  hard to scan, and there was no at-a-glance way to confirm a Class's
+  weekly load is complete without cross-checking the overload warning
+  (which only fires when *over*, not simply to confirm a total).
+- **Affected epics/tasks**: E05 (`AssignmentsConfig.vue`,
+  `entities.ts`'s `copyAssignments`/`classLoads`) — already `done`; a
+  retrofit, not a reopening of its checkpoint.
+
 *(entries above are the most recent)*
