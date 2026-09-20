@@ -1,6 +1,6 @@
 # INTERLUDE-1 — UI/UX Pass
 
-**Status**: in-review
+**Status**: done
 
 ## Goal
 
@@ -54,7 +54,7 @@ numbered outside the E&lt;NN&gt; sequence.
 | INTERLUDE-1-T5 | Apply `WeekGrid` to Segment Time Slot/Break configuration | done |
 | INTERLUDE-1-T6 | Apply `WeekGrid` to Teacher Availability configuration | done |
 | INTERLUDE-1-T7 | Remove implementation-detail leaks: same-name-Teacher disambiguation without a raw id, decode Assignment's consecutive-periods value into its label everywhere it's shown, audit remaining screens for similar leaks | done |
-| INTERLUDE-1-T8 | Regression pass: re-verify E02–E05's Human Verification steps through the reworked UI | in-review |
+| INTERLUDE-1-T8 | Regression pass: re-verify E02–E05's Human Verification steps through the reworked UI | done |
 
 ## Decisions
 
@@ -127,3 +127,5 @@ numbered outside the E&lt;NN&gt; sequence.
   click. Per `PROCESS.md` §4/§6, T8 and the epic itself stay `in-review`
   until a human walks through the Human Verification steps above and flips
   them to `done`.
+- **Human verification confirmed** (2026-09-20): user reviewed and signed
+  off ("looks good"). T8 and the epic moved to `done`.
