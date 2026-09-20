@@ -43,4 +43,35 @@ Template for a new entry:
 
 ---
 
-*(entries above are the most recent — this file is otherwise empty)*
+## D-03 — Repo layout: `app/` (frontend) + `solver/` (Rust/WASM crate)
+
+- **Date**: 2026-09-20
+- **Type**: Implementation-only
+- **Spec refs**: none directly — PROCESS.md said code lives at repo root "organized however the tooling wants," without pinning an exact layout.
+- **What changes**: the Vue/Vite frontend lives under `app/` (its own `src/`, `index.html`, `package.json`, `vite.config.ts`), and the Rust solver crate lives under `solver/` (its own `Cargo.toml`, `src/lib.rs`). Both tools default to a `src/` directory, so they can't share repo root without colliding — subfolders resolve that while keeping each tool's own conventional layout intact. Matches the existing top-level convention of thematic folders (`specs/`, `impls/`, `sheets/`).
+- **Why**: a real, unavoidable naming collision, resolved the simplest way rather than renaming either tool's default output directory.
+- **Affected epics/tasks**: E01 (all scaffolding tasks); every later epic's file paths follow this layout.
+
+## D-04 — Package manager: npm
+
+- **Date**: 2026-09-20
+- **Type**: Implementation-only
+- **Spec refs**: none.
+- **What changes**: npm is the JS package manager, not pnpm/yarn.
+- **Why**: npm was already available locally (bundled with Node); neither pnpm nor yarn was installed, and there's no stated reason in the specs to prefer either.
+- **Affected epics/tasks**: E01.
+
+---
+
+## D-05 — Toolchain versions pinned
+
+- **Date**: 2026-09-20
+- **Type**: Implementation-only
+- **Spec refs**: none.
+- **What changes**: Node is pinned to `26.7.0` (`app/.nvmrc`); Rust is pinned to `1.97.1` with the `wasm32-unknown-unknown` target and `rustfmt`/`clippy` components (`solver/rust-toolchain.toml`, auto-applied by `rustup` for any command run under `solver/`, including in CI). `wasm-pack` has no version file — it's installed fresh in CI via `cargo install wasm-pack --locked`; not pinned to a specific version yet.
+- **Why**: these were simply whatever was already installed locally when E01 started; pinning them stops CI and local dev from silently drifting apart. Not chosen for any specific compatibility reason — revisit if a real reason to pin differently comes up.
+- **Affected epics/tasks**: E01.
+
+---
+
+*(entries above are the most recent)*

@@ -11,8 +11,14 @@ target/
 pkg/
 wasm-pack.log
 
+# Logs
+logs
+*.log
+npm-debug.log*
+
 # Editor
-.vscode/
+.vscode/*
+!.vscode/extensions.json
 .idea/
 *.swp
 

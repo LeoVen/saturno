@@ -1,0 +1,102 @@
+name: CI & Deploy
+
+# TR-18: CI/CD pipeline building the Vue/Vite frontend and the Rust/WASM
+# solver crate, then publishing to GitHub Pages. Rust toolchain version and
+# targets/components come from solver/rust-toolchain.toml (rustup honors it
+# automatically for any cargo command run under solver/) — no separate
+# toolchain-pinning action needed.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  lint-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: app/.nvmrc
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Rust fmt check
+        working-directory: solver
+        run: cargo fmt --check
+
+      - name: Rust clippy
+        working-directory: solver
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Rust tests
+        working-directory: solver
+        run: cargo test
+
+      - name: Install frontend dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: Frontend lint
+        working-directory: app
+        run: npm run lint
+
+      - name: Frontend format check
+        working-directory: app
+        run: npm run format
+
+      - name: Frontend tests
+        working-directory: app
+        run: npm run test
+
+  build-deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: lint-test
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: app/.nvmrc
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install wasm-pack
+        run: cargo install wasm-pack --locked
+
+      - name: Install frontend dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: Build solver WASM package
+        working-directory: app
+        run: npm run build:wasm
+
+      - name: Build frontend
+        working-directory: app
+        run: npm run build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: app/dist
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
