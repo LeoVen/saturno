@@ -4,8 +4,11 @@ import { useEntitiesStore } from '../stores/entities'
 
 const store = useEntitiesStore()
 
+// Which Segment is selected is shared with GradesClassesConfig (Grades/
+// Classes are configured nested under a Segment, per FR-6 / E03-T4).
+const selectedSegmentId = defineModel<string | null>({ default: null })
+
 const newSegmentName = ref('')
-const selectedSegmentId = ref<string | null>(null)
 
 const selectedSegment = computed(() =>
   selectedSegmentId.value ? store.segmentById(selectedSegmentId.value) : undefined,

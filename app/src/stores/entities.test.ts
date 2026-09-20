@@ -114,3 +114,102 @@ describe('entities store — Breaks', () => {
     expect(store.segmentById(segmentId)?.breaks).toHaveLength(0)
   })
 })
+
+describe('entities store — Grades', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('adds a Grade under its Segment and renames it', () => {
+    const store = useEntitiesStore()
+    const segmentId = store.addSegment('Ensino Fundamental')
+
+    const gradeId = store.addGrade(segmentId, '7º Ano') as string
+
+    expect(store.gradesBySegment(segmentId)).toHaveLength(1)
+    expect(store.gradeById(gradeId)?.name).toBe('7º Ano')
+
+    store.renameGrade(gradeId, '7º Ano (EF2)')
+    expect(store.gradeById(gradeId)?.name).toBe('7º Ano (EF2)')
+  })
+
+  it('rejects a Grade under a nonexistent Segment', () => {
+    const store = useEntitiesStore()
+    expect(store.addGrade('does-not-exist', '7º Ano')).toBeUndefined()
+    expect(store.grades).toHaveLength(0)
+  })
+
+  it('removing a Grade cascades to its Classes', () => {
+    const store = useEntitiesStore()
+    const segmentId = store.addSegment('EF')
+    const gradeId = store.addGrade(segmentId, '7º Ano') as string
+    store.addClass(gradeId, '7º Ano A')
+    store.addClass(gradeId, '7º Ano B')
+
+    store.removeGrade(gradeId)
+
+    expect(store.grades).toHaveLength(0)
+    expect(store.classes).toHaveLength(0)
+  })
+
+  it('removing a Segment cascades to its Grades and their Classes', () => {
+    const store = useEntitiesStore()
+    const segmentId = store.addSegment('EF')
+    const gradeId = store.addGrade(segmentId, '7º Ano') as string
+    store.addClass(gradeId, '7º Ano A')
+
+    store.removeSegment(segmentId)
+
+    expect(store.grades).toHaveLength(0)
+    expect(store.classes).toHaveLength(0)
+  })
+})
+
+describe('entities store — Classes', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('adds Classes under a Grade and renames/removes one', () => {
+    const store = useEntitiesStore()
+    const segmentId = store.addSegment('EF')
+    const gradeId = store.addGrade(segmentId, '7º Ano') as string
+
+    const classAId = store.addClass(gradeId, '7º Ano A') as string
+    store.addClass(gradeId, '7º Ano B')
+
+    expect(store.classesByGrade(gradeId).map((c) => c.name)).toEqual(['7º Ano A', '7º Ano B'])
+
+    store.renameClass(classAId, '7º Ano A (renomeada)')
+    expect(store.classById(classAId)?.name).toBe('7º Ano A (renomeada)')
+
+    store.removeClass(classAId)
+    expect(store.classesByGrade(gradeId)).toHaveLength(1)
+  })
+
+  it('rejects a Class under a nonexistent Grade', () => {
+    const store = useEntitiesStore()
+    expect(store.addClass('does-not-exist', '7º Ano A')).toBeUndefined()
+    expect(store.classes).toHaveLength(0)
+  })
+})
+
+describe('entities store — Subjects', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('adds, renames, and removes a Subject in the global catalog', () => {
+    const store = useEntitiesStore()
+    const id = store.addSubject('História')
+
+    expect(store.subjects).toHaveLength(1)
+    expect(store.subjectById(id)?.name).toBe('História')
+
+    store.renameSubject(id, 'História Geral')
+    expect(store.subjectById(id)?.name).toBe('História Geral')
+
+    store.removeSubject(id)
+    expect(store.subjects).toHaveLength(0)
+  })
+})
