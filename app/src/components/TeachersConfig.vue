@@ -1,16 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useEntitiesStore } from '../stores/entities'
-import { WEEKDAYS, type Weekday } from '../entities/weekday'
+import { WEEKDAYS, WEEKDAY_LABELS, type Weekday } from '../entities/weekday'
 import WeekGrid, { type WeekGridColumn, type WeekGridRow } from './WeekGrid.vue'
-
-const WEEKDAY_LABELS: Record<Weekday, string> = {
-  mon: 'Segunda',
-  tue: 'Terça',
-  wed: 'Quarta',
-  thu: 'Quinta',
-  fri: 'Sexta',
-}
 
 const store = useEntitiesStore()
 

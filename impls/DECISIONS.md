@@ -311,4 +311,20 @@ Template for a new entry:
   of a second, one-off naming UI.
 - **Affected epics/tasks**: E07-T3 (`ScheduleVersionsView.vue`).
 
+## D-24 — Per-Teacher view rows: the same cross-Segment union as Teacher Availability
+
+- **Date**: 2026-09-20
+- **Type**: Clarification
+- **Spec refs**: FR-21, D-01, D-15
+- **What changes**: `TeacherScheduleGrid.vue`'s rows are `entities.availabilityGridPeriods`
+  (D-15's deduplicated, sorted union of every configured Segment's Time
+  Slots) rather than one Segment's own period list. A placement's real
+  clock time (resolved via its Class's Segment, D-01) is matched to a row
+  by exact (start, end).
+- **Why**: a Teacher can cross Segments with different period grids (D-01),
+  so there's no single "the" period list to use for a Teacher's own weekly
+  row — the same problem D-15 already solved for the Availability grid,
+  reused here rather than inventing a second cross-Segment merge.
+- **Affected epics/tasks**: E08-T2.
+
 *(entries above are the most recent)*

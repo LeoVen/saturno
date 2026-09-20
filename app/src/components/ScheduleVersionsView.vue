@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { useScheduleVersionsStore } from '../stores/scheduleVersions'
-import ScheduleGrid from './ScheduleGrid.vue'
 
 // FR-24: named Schedule Versions — hold several at once, switch between
 // them, duplicate one as the starting point for a new one. Versions are
 // created from E06's Generate screen ("Salvar como nova versão"); this
-// screen manages what's saved.
+// screen manages what's saved. Browsing a version's actual schedule is
+// E08's "Visualizar Horário" screen.
 
 const store = useScheduleVersionsStore()
 
@@ -69,10 +69,5 @@ function duplicateVersion(id: string, name: string): void {
     <p v-else class="empty">
       Nenhuma versão salva ainda. Gere um horário em "Gerar Horário" e salve-o como versão.
     </p>
-  </div>
-
-  <div v-if="store.activeVersion" class="card">
-    <h3>{{ store.activeVersion.name }}</h3>
-    <ScheduleGrid :schedule="store.activeVersion.schedule" />
   </div>
 </template>
