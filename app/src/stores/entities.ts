@@ -349,6 +349,15 @@ export const useEntitiesStore = defineStore('entities', {
     },
 
     /**
+     * One-off bulk reorder to alphabetical-by-name — a fast way to get a
+     * sensible starting order, not a standing invariant: `moveTeacher`
+     * still freely rearranges the result afterward (D-26).
+     */
+    sortTeachersByName(): void {
+      this.teachers = [...this.teachers].sort((a, b) => a.name.localeCompare(b.name))
+    },
+
+    /**
      * D-25: which Subjects a Teacher can teach — narrows the Teacher picker
      * on an Assignment (FR-9), nothing more. `?? []` throughout guards
      * against Teacher records persisted before this field existed.

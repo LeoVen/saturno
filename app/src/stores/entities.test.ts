@@ -323,6 +323,20 @@ describe('entities store — Teachers', () => {
     store.moveTeacher(a, 'up')
     expect(store.teachers.map((t) => t.id)).toEqual([a, c, b])
   })
+
+  it('sortTeachersByName is a one-off bulk sort, not a standing order', () => {
+    const store = useEntitiesStore()
+    const carla = store.addTeacher('Carla')
+    const ana = store.addTeacher('Ana')
+    const bruno = store.addTeacher('Bruno')
+
+    store.sortTeachersByName()
+    expect(store.teachers.map((t) => t.id)).toEqual([ana, bruno, carla])
+
+    // Still freely reorderable afterward — sorting isn't an invariant.
+    store.moveTeacher(carla, 'up')
+    expect(store.teachers.map((t) => t.id)).toEqual([ana, carla, bruno])
+  })
 })
 
 describe('entities store — Teacher Subjects (D-25)', () => {

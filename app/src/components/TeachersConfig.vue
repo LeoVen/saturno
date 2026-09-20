@@ -105,6 +105,15 @@ function toggleCell(weekday: Weekday, rowKey: string): void {
   <h2>Professores</h2>
 
   <div class="card">
+    <button
+      v-if="store.teachers.length > 1"
+      type="button"
+      class="btn btn-sm"
+      style="margin-bottom: var(--space-2)"
+      @click="store.sortTeachersByName()"
+    >
+      Ordenar por nome (A-Z)
+    </button>
     <ul class="pill-list">
       <li v-for="(teacher, index) in store.teachers" :key="teacher.id">
         <button

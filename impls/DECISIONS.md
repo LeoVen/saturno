@@ -448,4 +448,21 @@ Template for a new entry:
   already `done`; E08 (`TeacherScheduleGrid.vue`), still `in-review` —
   neither epic's checkpoint is reopened, this amends files they introduced.
 
+## D-30 — Teachers list: one-off "Ordenar por nome (A-Z)" bulk sort
+
+- **Date**: 2026-09-20
+- **Type**: Implementation-only
+- **Spec refs**: FR-2, D-26
+- **What changes**: a button on the Professores screen bulk-sorts
+  `teachers` alphabetically by name in one action (`sortTeachersByName`).
+  It's a one-off rewrite of the same manually-editable order D-26
+  introduced, not a standing invariant — `moveTeacher` still freely
+  reorders the list afterward.
+- **Why**: user-requested, right after D-26/D-28 — a fast way to reach a
+  sensible starting order (most schools would want alphabetical by
+  default) without giving up the ability to hand-tune it afterward (e.g.
+  grouping a few Teachers together regardless of name).
+- **Affected epics/tasks**: E04 (`TeachersConfig.vue`), already `done`; a
+  retrofit, not a reopening of its checkpoint.
+
 *(entries above are the most recent)*
