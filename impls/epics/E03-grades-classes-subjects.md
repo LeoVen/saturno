@@ -1,6 +1,6 @@
 # E03 — Grades, Classes & Subjects
 
-**Status**: in-review
+**Status**: done
 
 ## Goal
 
@@ -31,7 +31,7 @@ solver ultimately builds a schedule for.
 | E03-T3 | Subject entity: global catalog, create/edit/delete (FR-7) | done |
 | E03-T4 | Config UI: Grades/Classes nested under their Segment | done |
 | E03-T5 | Config UI: global Subject catalog | done |
-| E03-T6 | Wire persistence for Grade/Class/Subject (TR-5) | in-review |
+| E03-T6 | Wire persistence for Grade/Class/Subject (TR-5) | done |
 
 ## Decisions
 
@@ -66,3 +66,5 @@ solver ultimately builds a schedule for.
   Grade/Segment, no console errors. Per `PROCESS.md` §4/§6, E03-T6 and the
   epic itself stay `in-review` until a human actually walks through the
   Human Verification steps and flips them to `done`.
+- **Human verification confirmed** (2026-09-20): user reviewed and signed
+  off ("looks good to me"). E03-T6 and the epic moved to `done`.

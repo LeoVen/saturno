@@ -1,6 +1,6 @@
 # E02 — Segments, Time Slots & Breaks
 
-**Status**: in-review
+**Status**: done
 
 ## Goal
 
@@ -30,7 +30,7 @@ configured against.
 | E02-T2 | Time Slot entity: per-Segment ordered list, start/end (24h) | done |
 | E02-T3 | Break entity: per-Segment, start/end, supports multiple per day | done |
 | E02-T4 | Config UI: manage one Segment's Time Slots and Breaks together | done |
-| E02-T5 | Wire persistence for Segment/Time Slot/Break (TR-5) | in-review |
+| E02-T5 | Wire persistence for Segment/Time Slot/Break (TR-5) | done |
 
 ## Decisions
 
@@ -68,3 +68,5 @@ configured against.
   and the epic itself stay `in-review` until a human walks through the
   Human Verification steps above (ideally with two Segments, EF/EM, matching
   the PRD example exactly) and flips them to `done`.
+- **Human verification confirmed** (2026-09-20): user reviewed and signed
+  off ("looks good to me"). E02-T5 and the epic moved to `done`.
