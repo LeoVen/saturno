@@ -115,4 +115,24 @@ Template for a new entry:
 
 ---
 
+## D-10 — School week is Monday–Friday
+
+- **Date**: 2026-09-20
+- **Type**: Clarification
+- **Spec refs**: FR-3, TR-10
+- **What changes**: Teacher Availability (and, implicitly, the schedule grid generally) is modeled over a fixed 5-day week (`mon`..`fri`) rather than an arbitrary/configurable weekday set.
+- **Why**: TR-10's scale assumption explicitly says "5-day weeks," and every real sample sheet in `sheets/` only has Monday–Friday columns — no evidence any Saturday/Sunday scheduling is in scope. Hardcoding this avoids a configurable-weekday-set feature nobody asked for.
+- **Affected epics/tasks**: E04 (Availability model); implicitly every later epic that renders a weekly grid (E06+, E08+).
+
+## D-11 — Teacher Availability defaults to fully available; the user records exceptions
+
+- **Date**: 2026-09-20
+- **Type**: Clarification
+- **Spec refs**: FR-3
+- **What changes**: a new Teacher starts with no `UnavailabilityRange`s, meaning available at every time. The user records specific (weekday, start, end) ranges where the Teacher is *not* available, rather than opting in to availability period-by-period. Combined with D-01, a range is an arbitrary real clock-time interval, not tied to any one Segment's period grid.
+- **Why**: FR-3 asks for a grid marking each day/period available or unavailable, but for the common case (a full-time teacher with a few known exceptions, e.g. "unavailable Tuesday afternoons") an opt-out model needs far less data entry than checking dozens of period cells across every Segment's grid — and, per D-01, there's no single shared grid to check cells against once a Teacher crosses Segments. This is a genuinely new implementation call (not explicitly settled by FR-3's wording), made here rather than deferred.
+- **Affected epics/tasks**: E04 (Availability model, config UI); E06 (Verifier must treat "no matching UnavailabilityRange" as available, not the reverse).
+
+---
+
 *(entries above are the most recent)*

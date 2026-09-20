@@ -1,7 +1,8 @@
 // Pure helpers for "HH:MM" 24h clock times (TR-11 pattern: pure, unit-tested
 // logic, kept independent of any store/UI code).
 
-import type { ClockTime } from './segment'
+/** 24h clock time, "HH:MM" (zero-padded), as produced by <input type="time">. */
+export type ClockTime = string
 
 /** Zero-padded "HH:MM" strings compare correctly as plain strings. */
 export function isValidRange(start: ClockTime, end: ClockTime): boolean {

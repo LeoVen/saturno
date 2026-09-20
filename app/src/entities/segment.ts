@@ -5,8 +5,7 @@
 // weekday it applies to — not modeled per (Segment, weekday).
 // D-01: Time Slots carry real absolute start/end clock times.
 
-/** 24h clock time, "HH:MM" (zero-padded), as produced by <input type="time">. */
-export type ClockTime = string
+import type { ClockTime } from './time'
 
 export interface TimeSlot {
   id: string

@@ -3,7 +3,10 @@ import type { Break, Segment, TimeSlot } from '../entities/segment'
 import type { Grade } from '../entities/grade'
 import type { Class } from '../entities/class'
 import type { Subject } from '../entities/subject'
+import type { Teacher, UnavailabilityRange } from '../entities/teacher'
+import type { Weekday } from '../entities/weekday'
 import { isValidRange, sortByStart } from '../entities/time'
+import { sortByWeekdayThenStart } from '../entities/weekday'
 
 /**
  * The entities store (IMPL.md §7): source of truth for school configuration,
@@ -23,6 +26,7 @@ export const useEntitiesStore = defineStore('entities', {
     grades: [] as Grade[],
     classes: [] as Class[],
     subjects: [] as Subject[],
+    teachers: [] as Teacher[],
   }),
   getters: {
     segmentById: (state) => {
@@ -42,6 +46,9 @@ export const useEntitiesStore = defineStore('entities', {
     },
     classesByGrade: (state) => {
       return (gradeId: string): Class[] => state.classes.filter((c) => c.gradeId === gradeId)
+    },
+    teacherById: (state) => {
+      return (id: string): Teacher | undefined => state.teachers.find((t) => t.id === id)
     },
   },
   actions: {
@@ -158,6 +165,60 @@ export const useEntitiesStore = defineStore('entities', {
 
     removeSubject(id: string): void {
       this.subjects = this.subjects.filter((s) => s.id !== id)
+    },
+
+    addTeacher(name: string): string {
+      // FR-2: names are intentionally not deduplicated/validated for
+      // uniqueness — two Teachers may share a name and are distinct
+      // entities, disambiguated by id.
+      const teacher: Teacher = { id: crypto.randomUUID(), name, unavailability: [] }
+      this.teachers.push(teacher)
+      return teacher.id
+    },
+
+    renameTeacher(id: string, name: string): void {
+      const teacher = this.teacherById(id)
+      if (teacher) teacher.name = name
+    },
+
+    removeTeacher(id: string): void {
+      this.teachers = this.teachers.filter((t) => t.id !== id)
+    },
+
+    addUnavailability(
+      teacherId: string,
+      weekday: Weekday,
+      start: string,
+      end: string,
+    ): string | undefined {
+      const teacher = this.teacherById(teacherId)
+      if (!teacher || !isValidRange(start, end)) return undefined
+      const range: UnavailabilityRange = { id: crypto.randomUUID(), weekday, start, end }
+      teacher.unavailability = sortByWeekdayThenStart([...teacher.unavailability, range])
+      return range.id
+    },
+
+    updateUnavailability(
+      teacherId: string,
+      rangeId: string,
+      weekday: Weekday,
+      start: string,
+      end: string,
+    ): boolean {
+      const teacher = this.teacherById(teacherId)
+      const range = teacher?.unavailability.find((r) => r.id === rangeId)
+      if (!teacher || !range || !isValidRange(start, end)) return false
+      range.weekday = weekday
+      range.start = start
+      range.end = end
+      teacher.unavailability = sortByWeekdayThenStart(teacher.unavailability)
+      return true
+    },
+
+    removeUnavailability(teacherId: string, rangeId: string): void {
+      const teacher = this.teacherById(teacherId)
+      if (!teacher) return
+      teacher.unavailability = teacher.unavailability.filter((r) => r.id !== rangeId)
     },
   },
 })

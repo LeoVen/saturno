@@ -213,3 +213,102 @@ describe('entities store — Subjects', () => {
     expect(store.subjects).toHaveLength(0)
   })
 })
+
+describe('entities store — Teachers', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('allows two Teachers with the same name as distinct entities', () => {
+    const store = useEntitiesStore()
+    const a = store.addTeacher('Guilherme')
+    const b = store.addTeacher('Guilherme')
+
+    expect(a).not.toBe(b)
+    expect(store.teachers).toHaveLength(2)
+    expect(store.teacherById(a)?.name).toBe('Guilherme')
+    expect(store.teacherById(b)?.name).toBe('Guilherme')
+  })
+
+  it('renames and removes a Teacher', () => {
+    const store = useEntitiesStore()
+    const id = store.addTeacher('Guilherme')
+
+    store.renameTeacher(id, 'Guilherme Silva')
+    expect(store.teacherById(id)?.name).toBe('Guilherme Silva')
+
+    store.removeTeacher(id)
+    expect(store.teachers).toHaveLength(0)
+  })
+
+  it('starts with no unavailability (fully available by default)', () => {
+    const store = useEntitiesStore()
+    const id = store.addTeacher('Guilherme')
+    expect(store.teacherById(id)?.unavailability).toEqual([])
+  })
+})
+
+describe('entities store — Teacher Availability', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('adds an Unavailability range for a partial, non-whole-day pattern', () => {
+    const store = useEntitiesStore()
+    const teacherId = store.addTeacher('Guilherme')
+
+    const id = store.addUnavailability(teacherId, 'tue', '13:00', '18:00')
+
+    expect(id).toBeDefined()
+    expect(store.teacherById(teacherId)?.unavailability).toEqual([
+      { id, weekday: 'tue', start: '13:00', end: '18:00' },
+    ])
+  })
+
+  it('orders ranges by weekday then start time', () => {
+    const store = useEntitiesStore()
+    const teacherId = store.addTeacher('Guilherme')
+
+    store.addUnavailability(teacherId, 'wed', '08:00', '09:00')
+    store.addUnavailability(teacherId, 'mon', '14:00', '15:00')
+    store.addUnavailability(teacherId, 'mon', '08:00', '09:00')
+
+    const ranges = store.teacherById(teacherId)?.unavailability ?? []
+    expect(ranges.map((r) => [r.weekday, r.start])).toEqual([
+      ['mon', '08:00'],
+      ['mon', '14:00'],
+      ['wed', '08:00'],
+    ])
+  })
+
+  it('rejects an invalid range and adds nothing', () => {
+    const store = useEntitiesStore()
+    const teacherId = store.addTeacher('Guilherme')
+
+    const result = store.addUnavailability(teacherId, 'tue', '18:00', '13:00')
+
+    expect(result).toBeUndefined()
+    expect(store.teacherById(teacherId)?.unavailability).toHaveLength(0)
+  })
+
+  it('rejects a range for a nonexistent Teacher', () => {
+    const store = useEntitiesStore()
+    expect(store.addUnavailability('does-not-exist', 'tue', '13:00', '18:00')).toBeUndefined()
+  })
+
+  it('updates and removes an Unavailability range', () => {
+    const store = useEntitiesStore()
+    const teacherId = store.addTeacher('Guilherme')
+    const id = store.addUnavailability(teacherId, 'tue', '13:00', '18:00') as string
+
+    expect(store.updateUnavailability(teacherId, id, 'wed', '14:00', '17:00')).toBe(true)
+    expect(store.teacherById(teacherId)?.unavailability[0]).toMatchObject({
+      weekday: 'wed',
+      start: '14:00',
+      end: '17:00',
+    })
+
+    store.removeUnavailability(teacherId, id)
+    expect(store.teacherById(teacherId)?.unavailability).toHaveLength(0)
+  })
+})
