@@ -1,6 +1,6 @@
 # E05 — Requirements, Assignments & Validation
 
-**Status**: in-review
+**Status**: done
 
 ## Goal
 
@@ -43,7 +43,7 @@ generation is ever attempted.
 | E05-T5 | Same-day repetition default + per-(Class, Subject) override (FR-12) | done |
 | E05-T6 | Validation: Class's total weekly required occurrences vs. available non-break periods (FR-13) | done |
 | E05-T7 | Validation: Teacher assigned to (Class, Subject) has zero overlapping availability (FR-13, uses D-01's time-range comparison) | done |
-| E05-T8 | Wire persistence for all of the above (TR-5) | in-review |
+| E05-T8 | Wire persistence for all of the above (TR-5) | done |
 | E05-T9 | Unit tests for the two FR-13 validation checks (TR-11) | done |
 
 ## Decisions
@@ -104,3 +104,5 @@ generation is ever attempted.
   an actual human — per `PROCESS.md` §4/§6, E05-T8 and the epic itself stay
   `in-review` until a human walks through the steps above and flips them to
   `done`.
+- **Human verification confirmed** (2026-09-20): user reviewed and signed
+  off ("Looks good"). E05-T8 and the epic moved to `done`.
