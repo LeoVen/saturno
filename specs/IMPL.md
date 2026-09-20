@@ -105,6 +105,7 @@ Given an already-valid `Schedule` and an `Absence` (FR-35: a Teacher plus the sp
 ### 5.2 Parallelism: Worker pool, not WASM threads `[CHALLENGED]`
 
 Each Worker runs its own independent Constructor + Refiner with a distinct RNG seed — no shared memory, no `SharedArrayBuffer`, no cross-origin-isolation header requirement on the host. Parallelism is bounded by `navigator.hardwareConcurrency` (capped at a sane maximum, e.g. 6–8, to leave the main thread responsive). This trades a small amount of theoretical throughput (vs. true shared-memory threading) for zero deployment-environment dependency, consistent with TR-2/TR-4's "just static files, works anywhere" stance.
+> **Confirmed by the v5 hosting decision (TR-17):** GitHub Pages cannot set custom response headers at all, so the `COOP`/`COEP` headers `SharedArrayBuffer` would require are not just undesirable to depend on — they're unavailable on the actual chosen host. This decision was made for portability reasons before the host was picked; picking GitHub Pages removes any future temptation to revisit it.
 
 ### 5.3 Progress streaming & cancellation `[NEW]`
 
@@ -158,9 +159,10 @@ Data crossing the JS↔Rust boundary is (de)serialized via `serde` + `serde-wasm
 ## 8. Toolchain
 
 - `wasm-pack` (or `wasm-bindgen` directly) to build the Rust crate to a WASM package consumable by the Vue app.
-- Vite as the bundler (Vue 3's standard default), configured to load the WASM package and spin up the Worker pool.
+- Vite as the bundler (Vue 3's standard default), configured to load the WASM package and spin up the Worker pool. Vite's `base` config is set to the GitHub Pages project-page subpath (`/saturno/`, per TR-17) so every emitted asset, Worker, and WASM URL resolves correctly when served from `https://<user>.github.io/saturno/` rather than domain root.
 - CI needs a Rust toolchain in addition to Node — a real, ongoing cost worth naming (challenge #6) rather than treating as free.
 - **`exceljs`** for `.xlsx` generation (§10) — chosen over SheetJS's community build because it supports cell fills, merges, and column widths in the browser without a paid tier; the real sample sheets rely on exactly that styling to be readable.
+- **Deployment (v5, TR-17/TR-18)**: a GitHub Actions workflow runs on pushes to `main` — installs Node and Rust, runs `wasm-pack build` for the solver crate, runs the Vite production build (with the `base` path above), then publishes the resulting static output to GitHub Pages via the `actions/deploy-pages` action (or an equivalent `gh-pages`-branch publish step). No other hosting-side configuration is needed, consistent with TR-2/TR-4's "just static files" stance.
 
 ---
 

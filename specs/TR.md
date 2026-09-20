@@ -70,3 +70,16 @@ These decisions were confirmed directly with the user during this review (see "D
 
 **TR-15** `[NEW]` The interface is usable on a standard laptop/desktop screen and browser window; phone-width responsiveness is not a design target for v1 given the data-entry-heavy, grid-based nature of the tool.
 > Why: flagged as an assumption, not a hard requirement — worth confirming with the user if schedules need to be checked on a phone in practice.
+
+---
+
+## Hosting & Deployment (v5)
+
+**TR-17** `[NEW]` `v5` The application is hosted as a static site on **GitHub Pages**, served from the `saturno` repository as a project page (`https://<user>.github.io/saturno/`) unless a custom domain is configured later. The build output resolves every asset, Web Worker script, and WASM module URL relative to a **configurable base path**, never to server root, since a project page is not served from domain root.
+> Why: confirmed directly with the user (PRD.md §4, v5). GitHub Pages hosting was previously left unstated (TR-1/TR-2 only said "runs in a browser" / "no backend"); a hosting-agnostic build that assumes root-relative paths would break on a project-page subpath.
+
+**TR-18** `[NEW]` `v5` A CI/CD pipeline (GitHub Actions) builds the application — the Node toolchain for the Vue/Vite frontend plus the Rust toolchain and `wasm-pack` for the WASM solver crate, per IMPL.md §8 — and publishes the static build output to GitHub Pages on pushes to the main branch.
+> Why: IMPL.md §8 already named the dual Node+Rust toolchain requirement for CI but never specified what CI does with it or how the app actually reaches its hosting target. GitHub Pages requires an explicit publish step; there is no implicit deploy.
+
+**TR-19** `[NEW]` `v5` The application uses **no URL-based client-side router in v1** — all views are reached through in-app state/tab navigation (consistent with IMPL.md §7's Pinia-only frontend architecture, which never specified a router). If a router is introduced in a future version, it must use **hash-based routing**, not history/path-based routing.
+> Why: GitHub Pages serves static files with no server-side URL rewriting, so a history-mode route that doesn't exist as a literal file 404s on direct load or refresh (the common workaround is a redirecting `404.html`, which this spec avoids needing entirely by not requiring history-mode routing in the first place). Decided without a direct question — a low-ambiguity default consistent with how the frontend architecture was already scoped; flag if a router turns out to be needed (PRD.md §4, v5).

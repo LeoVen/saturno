@@ -1,6 +1,6 @@
 # Saturno — Product Requirements Document
 
-Version: v4 (supersedes v3) · Date: 2026-09-20
+Version: v5 (supersedes v4) · Date: 2026-09-20
 
 ## 1. Problem Statement
 
@@ -45,6 +45,8 @@ These were open architectural/scope questions in prd-v1 that materially affect d
 | FR-18 conflict-flag persistence | **Recomputed live** by calling the Verifier whenever a view renders — never stored on the Schedule Version, so it can't go stale. |
 | FR-19 Notes storage | **Scoped to Schedule Version**, not global — lives in the schedule-versions store, not the entities store. Decided without a direct question (low ambiguity); flag if wrong. → IMPL.md §7. |
 | TR-8 migration policy | **Migrate older files forward automatically** (sequential per-version migration functions); **reject newer files outright** with a clear error rather than guessing at an unknown future schema. Decided without a direct question (safe default); flag if wrong. → IMPL.md §7. |
+| Hosting/deployment target (v5) | **GitHub Pages** — static hosting, built and published via a GitHub Actions workflow. Confirmed directly with the user. This *hardens*, not changes, the existing Worker-pool-over-shared-memory-WASM-threads decision (IMPL.md §5.2): GitHub Pages has no mechanism to set custom response headers at all, so `SharedArrayBuffer`-based threading (which needs `COOP`/`COEP` headers) is structurally unavailable, not merely avoided for portability. → TR-17–19, IMPL.md §5.2/§8. |
+| Client-side routing under GitHub Pages (v5) | **No URL-based router for v1** — all views are reached via in-app state/tabs, consistent with IMPL.md §7's Pinia-only architecture, which never specified a router. Decided without a direct question (GitHub Pages has no server-side rewrite support, so any future history-mode router would need the 404.html-redirect workaround or hash-based routing; avoiding a router entirely sidesteps the issue for v1). Flag if a router turns out to be needed. → TR-19. |
 
 ## 5. Requirements
 
@@ -69,6 +71,7 @@ prd-v1 was a solid first pass but under-specified in ways that only became visib
 6. **Export was only specified for the tool's own data**, but every real artifact in `sheets/` is a human-readable grid meant to be handed to staff — a distinct output requirement from lossless data interchange. → FR-22, TR-13.
 7. **Double periods and same-day repetition weren't addressed at all**, despite being visibly relevant in the sample data and in a constraint the user raised directly (max 3 consecutive periods of the same subject). → FR-10, FR-12.
 8. **Shared multi-class periods (Itinerário-style) weren't addressed at all**, and the obvious way to model them (a full cross-class "Group" with per-student enrollment) is far more than the actual scheduling problem needs. A **Joint Session** — Classes and parallel Teacher/Subject Tracks booked simultaneously, with no student data — solves the real conflict (classes and teachers occupied at once) at a fraction of the modeling cost, and was added to the MVP. → FR-25–31.
+9. **v4 left the hosting target unstated (hosting-agnostic "client-only SPA").** v5 confirms **GitHub Pages** as the actual deployment target, which surfaces concrete requirements a hosting-agnostic spec didn't need: build output must resolve assets/Workers/WASM relative to a configurable base path (not server root), no server-side URL rewriting is available, and a CI build/deploy pipeline must exist. → TR-17–19, IMPL.md §8.
 
 ## 7. Assumptions Made (flag if wrong)
 
@@ -82,7 +85,7 @@ These were not blocking enough to hold up drafting, but are genuine guesses — 
 
 ## 8. Open Questions
 
-None outstanding as of this v4 revision. v3 resolved the four open questions carried from v2 (legacy import, substitute workflow, scale, Joint Session shape). v4 closed the remaining implementation-level gaps found while cross-referencing FR.md/TR.md against IMPL.md: human-readable export scope and mechanism, FR-16's infeasibility report depth, and FR-18's conflict-flag persistence (all resolved directly with the user — §4), plus FR-19's Notes storage and TR-8's migration policy (decided without a direct question, low-ambiguity implementation defaults — also §4, flagged there for override). Genuine assumptions that remain — not blocking, but worth re-checking — are tracked in §7.
+None outstanding as of this v5 revision. v3 resolved the four open questions carried from v2 (legacy import, substitute workflow, scale, Joint Session shape). v4 closed the remaining implementation-level gaps found while cross-referencing FR.md/TR.md against IMPL.md: human-readable export scope and mechanism, FR-16's infeasibility report depth, and FR-18's conflict-flag persistence (all resolved directly with the user — §4), plus FR-19's Notes storage and TR-8's migration policy (decided without a direct question, low-ambiguity implementation defaults — also §4, flagged there for override). v5 confirmed the hosting target (GitHub Pages) directly with the user, which in turn surfaced the no-router decision for v1 (decided without a direct question — §4, flag if wrong). Genuine assumptions that remain — not blocking, but worth re-checking — are tracked in §7.
 
 ---
 
