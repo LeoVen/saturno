@@ -208,4 +208,102 @@ describe('buildTeacherScheduleGrid', () => {
     expect(grid.cells.has('tue:07:00-07:50')).toBe(false)
     expect(grid.cells.has('tue:07:50-08:40')).toBe(false)
   })
+
+  it('FR-31: shows a Joint Session Track as occupied, labeled by the session name and Track subject', () => {
+    const entities = makeEntities({
+      segments: [
+        {
+          id: 'seg-1',
+          name: 'Ensino Médio',
+          timeSlots: [
+            { id: 'ts-1', start: '07:00', end: '07:50' },
+            { id: 'ts-2', start: '07:50', end: '08:40' },
+          ],
+          breaks: [],
+        },
+      ],
+      grades: [{ id: 'g-1', segmentId: 'seg-1', name: '1ª Série' }],
+      classes: [
+        { id: 'c-1', gradeId: 'g-1', name: 'A' },
+        { id: 'c-2', gradeId: 'g-1', name: 'B' },
+      ],
+      subjects: [{ id: 'sub-hum', name: 'Ciências Humanas' }],
+      teachers: [{ id: 't-1', name: 'Ana', unavailability: [], subjectIds: [] }],
+      jointSessions: [
+        {
+          id: 'js-1',
+          name: 'Itinerários',
+          classIds: ['c-1', 'c-2'],
+          tracks: [{ id: 'tr-1', subjectId: 'sub-hum', teacherId: 't-1' }],
+          weeklyOccurrences: 1,
+        },
+      ],
+    })
+    const schedule: Schedule = {
+      placements: [],
+      jointSessionPlacements: [{ jointSessionId: 'js-1', weekday: 'mon', timeSlotId: 'ts-1' }],
+    }
+
+    const grid = buildTeacherScheduleGrid(entities, schedule, 't-1')
+    expect(grid).not.toBeNull()
+    expect(grid!.cells.get('mon:07:00-07:50')).toEqual({
+      kind: 'occupied',
+      classLabel: 'Itinerários',
+      subject: 'Ciências Humanas',
+    })
+  })
+
+  it('merges an ordinary placement and a Joint Session Track into one timeline, with a Gap between them', () => {
+    const entities = makeEntities({
+      segments: [
+        {
+          id: 'seg-1',
+          name: 'Ensino Médio',
+          timeSlots: [
+            { id: 'ts-1', start: '07:00', end: '07:50' },
+            { id: 'ts-2', start: '07:50', end: '08:40' },
+            { id: 'ts-3', start: '08:40', end: '09:30' },
+          ],
+          breaks: [],
+        },
+      ],
+      grades: [{ id: 'g-1', segmentId: 'seg-1', name: '1ª Série' }],
+      classes: [{ id: 'c-1', gradeId: 'g-1', name: 'A' }],
+      subjects: [
+        { id: 'sub-math', name: 'Matemática' },
+        { id: 'sub-hum', name: 'Ciências Humanas' },
+      ],
+      teachers: [{ id: 't-1', name: 'Ana', unavailability: [], subjectIds: [] }],
+      jointSessions: [
+        {
+          id: 'js-1',
+          name: 'Itinerários',
+          classIds: ['c-1'],
+          tracks: [{ id: 'tr-1', subjectId: 'sub-hum', teacherId: 't-1' }],
+          weeklyOccurrences: 1,
+        },
+      ],
+    })
+    const schedule: Schedule = {
+      placements: [
+        {
+          classId: 'c-1',
+          subjectId: 'sub-math',
+          teacherId: 't-1',
+          weekday: 'mon',
+          timeSlotId: 'ts-1',
+        },
+      ],
+      jointSessionPlacements: [{ jointSessionId: 'js-1', weekday: 'mon', timeSlotId: 'ts-3' }],
+    }
+
+    const grid = buildTeacherScheduleGrid(entities, schedule, 't-1')!
+    expect(grid.cells.get('mon:07:00-07:50')?.kind).toBe('occupied')
+    expect(grid.cells.get('mon:07:50-08:40')).toEqual({ kind: 'gap' })
+    expect(grid.cells.get('mon:08:40-09:30')).toEqual({
+      kind: 'occupied',
+      classLabel: 'Itinerários',
+      subject: 'Ciências Humanas',
+    })
+  })
 })

@@ -760,4 +760,40 @@ Template for a new entry:
   the Refiner). Not a confirmed requirement yet — needs its own scoping
   pass before it becomes an FR.
 
+## D-40 — Joint Sessions: separate placement array, not synthetic PlacedPeriods
+
+- **Date**: 2026-09-21
+- **Type**: Implementation-only
+- **Spec refs**: FR-25–31, IMPL.md §4.1/§6
+- **What changes**: a Joint Session occurrence is represented as its own
+  `JointSessionPlacement { jointSessionId, weekday, timeSlotId }`, in a
+  new `Schedule.jointSessionPlacements` array — not as one `PlacedPeriod`
+  per participating Class with some synthetic Subject/Teacher. The
+  Constructor's per-task search (`constructor.rs`) was generalized from a
+  struct to a `Task` enum (`Assignment | JointSession`) so both share one
+  backtracking loop; Joint Session tasks go first (they constrain several
+  Classes/Teachers simultaneously — committing to them before an
+  Assignment claims a needed slot avoids backtracking into a dead end
+  found only much later). `verify`'s FR-29 check reuses
+  `ClassDoubleBooked`/`TeacherDoubleBooked` (same violation from the
+  user's point of view) rather than a new Violation variant, cross-checked
+  against both ordinary placements and other Joint Session occurrences.
+- **Why**: FR-30 is explicit that a Joint Session slot never satisfies any
+  (Class, Subject) requirement — a `PlacedPeriod` always has exactly one
+  Subject and one Teacher, and giving a synthetic Joint-Session Placement
+  a real (or fake) `subjectId` would either wrongly count toward FR-8's
+  occurrence-count check or require every FR-8-adjacent check to special-
+  case "unless this is actually a Joint Session," multiplying the surface
+  area for the same kind of subtle bug twice. A structurally separate
+  array makes "only `placements` ever satisfies an Assignment" true by
+  construction, not by convention every future check has to remember.
+- **Found and fixed while verifying this** (not a spec deviation, a real
+  bug): `TeacherScheduleGrid.vue`'s locally-built `entitiesSnapshot` never
+  included `jointSessions`, so a Teacher who only staffs Joint Session
+  Tracks (no ordinary Assignment) showed no schedule at all. See E10's
+  epic file Notes for the full writeup and the matching gap this exposed
+  in `ExportView.vue`/E12 (Joint Sessions don't render in the
+  Human-Readable Export yet — not this epic's scope, flagged there).
+- **Affected epics/tasks**: E10, all tasks `done`, epic `in-review`.
+
 *(entries above are the most recent)*

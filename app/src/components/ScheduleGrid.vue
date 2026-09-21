@@ -94,6 +94,29 @@ function cellContent(weekday: string, timeSlotId: string): CellContent | undefin
   return placementsByCell.value.get(`${weekday}:${timeSlotId}`)
 }
 
+// FR-31: a Joint Session occurrence, shown distinctly from a normal
+// period (own styling below, no Subject/Teacher pill) whenever the
+// selected Class participates in it.
+interface JointCellContent {
+  sessionName: string
+}
+
+const jointSessionByCell = computed<Map<string, JointCellContent>>(() => {
+  const map = new Map<string, JointCellContent>()
+  const schedule = props.schedule
+  if (!schedule || !selectedClassId.value) return map
+  for (const jp of schedule.jointSessionPlacements ?? []) {
+    const session = entities.jointSessionById(jp.jointSessionId)
+    if (!session || !session.classIds.includes(selectedClassId.value)) continue
+    map.set(`${jp.weekday}:${jp.timeSlotId}`, { sessionName: session.name })
+  }
+  return map
+})
+
+function jointSessionContent(weekday: string, timeSlotId: string): JointCellContent | undefined {
+  return jointSessionByCell.value.get(`${weekday}:${timeSlotId}`)
+}
+
 // FR-17: click-to-pick-up, click-to-place (move, or swap if the target is occupied).
 const pickedUp = ref<{ weekday: string; timeSlotId: string } | null>(null)
 
@@ -103,6 +126,10 @@ function isPickedUp(weekday: string, timeSlotId: string): boolean {
 
 function onCellClick(weekday: string, timeSlotId: string): void {
   if (!canEdit.value) return
+  // A Joint Session occurrence isn't an Assignment placement — nothing to
+  // pick up, and never a valid move target (that would silently create a
+  // real, but invisible-until-verified, FR-29 conflict).
+  if (jointSessionContent(weekday, timeSlotId)) return
   if (pickedUp.value) {
     const from = pickedUp.value
     pickedUp.value = null
@@ -220,11 +247,14 @@ function deleteNote(weekday: string, timeSlotId: string): void {
       <div class="cell-stack">
         <div
           class="cell-target"
-          :class="{ editable: canEdit }"
+          :class="{ editable: canEdit && !jointSessionContent(column.key, row.key) }"
           @click="onCellClick(column.key, row.key)"
         >
+          <div v-if="jointSessionContent(column.key, row.key)" class="pill joint-session">
+            {{ jointSessionContent(column.key, row.key)!.sessionName }}
+          </div>
           <div
-            v-if="cellContent(column.key, row.key)"
+            v-else-if="cellContent(column.key, row.key)"
             class="pill"
             :class="{
               selected: isPickedUp(column.key, row.key),
@@ -296,6 +326,15 @@ function deleteNote(weekday: string, timeSlotId: string): void {
 .pill.conflict {
   border-color: var(--color-danger-border);
   background: var(--color-danger-bg);
+}
+
+/** FR-31: a Joint Session occurrence reads as visually distinct from an ordinary Subject/Teacher period. */
+.pill.joint-session {
+  background: #ede9fe;
+  border-color: #c4b5fd;
+  color: #5b21b6;
+  font-weight: 600;
+  cursor: default;
 }
 
 .note-toggle {

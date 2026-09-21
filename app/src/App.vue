@@ -6,6 +6,7 @@ import GradesClassesConfig from './components/GradesClassesConfig.vue'
 import SubjectsConfig from './components/SubjectsConfig.vue'
 import TeachersConfig from './components/TeachersConfig.vue'
 import AssignmentsConfig from './components/AssignmentsConfig.vue'
+import JointSessionsConfig from './components/JointSessionsConfig.vue'
 import GenerateView from './components/GenerateView.vue'
 import ScheduleVersionsView from './components/ScheduleVersionsView.vue'
 import AdjustScheduleView from './components/AdjustScheduleView.vue'
@@ -22,6 +23,7 @@ const SECTIONS: SidebarSection[] = [
   { key: 'subjects', label: 'Disciplinas' },
   { key: 'teachers', label: 'Professores' },
   { key: 'assignments', label: 'Atribuições' },
+  { key: 'jointSessions', label: 'Sessões Conjuntas' },
   { key: 'generate', label: 'Gerar Horário' },
   { key: 'versions', label: 'Versões' },
   { key: 'adjust', label: 'Ajustar Horário' },
@@ -42,6 +44,7 @@ const activeSection = ref(SECTIONS[0]!.key)
       <SubjectsConfig v-else-if="activeSection === 'subjects'" />
       <TeachersConfig v-else-if="activeSection === 'teachers'" />
       <AssignmentsConfig v-else-if="activeSection === 'assignments'" />
+      <JointSessionsConfig v-else-if="activeSection === 'jointSessions'" />
       <GenerateView v-else-if="activeSection === 'generate'" />
       <ScheduleVersionsView v-else-if="activeSection === 'versions'" />
       <AdjustScheduleView v-else-if="activeSection === 'adjust'" />

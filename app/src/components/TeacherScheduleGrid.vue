@@ -38,6 +38,7 @@ const entitiesSnapshot = computed(() => ({
   subjects: entities.subjects,
   teachers: entities.teachers,
   assignments: entities.assignments,
+  jointSessions: entities.jointSessions,
 }))
 
 const teacherGrid = computed(() => {
