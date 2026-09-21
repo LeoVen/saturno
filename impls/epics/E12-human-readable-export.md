@@ -32,9 +32,9 @@ use the app — comparable in layout to the school's existing spreadsheets in
 
 | ID | Task | Status |
 |---|---|---|
-| E12-T1 | Shared view-model: lay out a Schedule Version's per-Class/per-Teacher data into the two-days-per-row, breaks-as-dividers shape (IMPL.md §9) | in-review |
-| E12-T2 | `@media print` stylesheet + print trigger for the on-screen grid components (TR-13) | in-review |
-| E12-T3 | `.xlsx` generation via `exceljs`: fills, merges, column widths matching the real sample sheets (TR-13) | in-review |
+| E12-T1 | Shared view-model: lay out a Schedule Version's per-Class/per-Teacher data into the two-days-per-row, breaks-as-dividers shape (IMPL.md §9) | done |
+| E12-T2 | `@media print` stylesheet + print trigger for the on-screen grid components (TR-13) | done |
+| E12-T3 | `.xlsx` generation via `exceljs`: fills, merges, column widths matching the real sample sheets (TR-13) | done |
 | E12-T4 | Notes footnote list + slot-level reference markers, identical in both output paths (FR-19, IMPL.md §9) | blocked |
 
 ## Decisions
@@ -66,14 +66,32 @@ use the app — comparable in layout to the school's existing spreadsheets in
   `ExportGridTable.vue`, and `xlsxExport.ts` together.
 - Real sample sheets in `sheets/` (`HorárioEF_24.08.2026_T1.xlsx`) were
   read directly (via a throwaway `openpyxl` venv, not committed) to match
-  fills/merges/column structure: yellow (`FFFFFF00`) bold day-name banner
-  merged across each day's columns, a two-tone header row (`FFFFCC00` for
-  "Horário", `FFFFFF66` for the Class/Teacher-name cells), Break rows
-  filled solid yellow as the divider, thin borders throughout. The export
-  cell content itself is Subject **and** Teacher (or Class **and**
-  Subject) per FR-20/21/22, even though the real sample sheets show only
-  the Teacher's name per cell (school convention, not a spec requirement)
-  — FR-22 is explicit that both must appear.
+  fills/merges/column structure: a bold day-name banner merged across each
+  day's columns, a two-tone header row ("Horário" darker than the
+  Class/Teacher-name cells), Break rows filled solid as the divider, thin
+  borders throughout — colors originally matched the real sheets' yellow,
+  since switched to light blue "for now" (see below). The export cell
+  content itself is Subject **and** Teacher (or Class **and** Subject) per
+  FR-20/21/22, even though the real sample sheets show only the Teacher's
+  name per cell (school convention, not a spec requirement) — FR-22 is
+  explicit that both must appear.
+- **Styling follow-up, user-requested (2026-09-21)**, after reviewing the
+  first version: (1) the per-Class grid's cell now shows the Teacher as
+  the bigger/bold primary line and the Subject smaller beneath it (was the
+  reverse) — done via a two-run `richText` value in the `.xlsx` (12pt
+  bold / 9pt muted) mirroring the preview's `.primary-line`/`<small>`
+  split; (2) fixed a real bug where column widths were only ever set for
+  the first day's columns in each two-days-per-row block, leaving
+  Tuesday/Thursday's at Excel's default width — every column across the
+  widest block is now sized uniformly (bumped 16→18); (3) palette switched
+  yellow→light blue (`#BFDBFE`/`#93C5FD`/`#DBEAFE`), explicitly "for now,"
+  not a final decision. All three verified against real exported school
+  data and confirmed by the user directly (preview screenshots + a
+  downloaded `.xlsx` re-opened) — this is genuine Human Verification of
+  T1–T3's actual output, even though the epic's own Human Verification
+  steps 1–2 (Notes) can't be walked yet. Per the user's explicit choice,
+  E12 stays `in-progress` (not `done`) until E09 lands Notes and T4 is
+  built — not re-scoped elsewhere.
 - `exceljs` pulls in a transitively vulnerable `uuid` (GHSA-w5hq-g745-h8pq,
   moderate) with no non-breaking fix available yet; not exploitable here
   (client-side only, uuid generation not on any untrusted-input path) —
