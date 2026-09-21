@@ -631,4 +631,45 @@ Template for a new entry:
 - **Affected epics/tasks**: E12-T1/T2, both `new` at the time of this
   decision.
 
+## D-37 — Per-Teacher schedule view: one merged grid per Teacher, with Gaps shown
+
+- **Date**: 2026-09-21
+- **Type**: Clarification (narrows D-29 for this one screen)
+- **Spec refs**: FR-15 (Gap/Janela), FR-21, D-01, D-29
+- **What changes**: the Per-Teacher schedule view (`TeacherScheduleGrid.vue`,
+  FR-21 — **not** the Teacher Availability grid on Professores, which stays
+  exactly as D-29 left it) now renders exactly one grid per Teacher instead
+  of one per Segment. For a Teacher who only teaches in one Segment (most
+  of them) this looks the same as before, just without D-29's blank
+  grids for every *other* configured Segment they don't actually teach in
+  (`gridGroups` previously iterated every Segment regardless of the
+  selected Teacher). For a Teacher who crosses Segments, their Time
+  Slots/Breaks are merged into one chronological row axis
+  (`entities/teacherSchedule.ts`, pure/unit-tested per TR-11) rather than
+  shown as separate per-Segment tables. Any real idle time between an
+  assignment ending in one Segment and the next starting in another is
+  rendered as a distinct "Janela" cell (hatched) — this is FR-15's Gap,
+  previously only used internally by the Solver's Soft Objective and never
+  surfaced in any view. `WeekGrid.vue` gained an optional `variant` field
+  on `WeekGridRow` (applied as a CSS class to that row's header + cells)
+  to let this component mark Break rows as a visual divider, reusable by
+  future consumers.
+- **Why**: user-requested, after noticing the segment-crossing case in
+  real data — for a Teacher who teaches in one Segment, a table per
+  Segment is one extra empty table's worth of noise (D-29 grouped by
+  *every configured* Segment, not by *this Teacher's* Segments); for one
+  who crosses Segments, separate tables hide the fact that a 10-15 minute
+  gap opens up between them (visible in the real school's data — Segment
+  Time Slots that don't line up, e.g. EF's 08:40-09:30 next to EM's
+  08:55-09:45). D-29's "don't merge" rule was written for the *generic,
+  editable* Teacher Availability grid, where merging is genuinely
+  ambiguous because there's no specific Teacher's actual placements to
+  anchor which Segment a given cell belongs to. The Per-Teacher schedule
+  view is different: it's read-only and already anchored to one specific
+  Teacher's actual placements, so merging is unambiguous and is what
+  correctly answers "what does this Teacher's day look like."
+- **Affected epics/tasks**: E08 (`TeacherScheduleGrid.vue`), already
+  `done` — a UI improvement to an already-shipped screen, not a reopening
+  of the epic's checkpoint.
+
 *(entries above are the most recent)*

@@ -34,7 +34,15 @@ per Class, and as a weekly grid per Teacher.
 
 - See [D-24](../DECISIONS.md) — the Per-Teacher grid's rows are the same
   cross-Segment union of Time Slots as D-15's Teacher Availability grid,
-  not one Segment's own period list.
+  not one Segment's own period list. (Superseded by D-29 below, then
+  narrowed back by D-37 for this screen specifically — see the lineage.)
+- See [D-29](../DECISIONS.md) — supersedes D-24/D-15's flat-merge design:
+  one grid per Segment instead, for both this view and the Teacher
+  Availability grid.
+- See [D-37](../DECISIONS.md) — narrows D-29 for this screen only (the
+  Teacher Availability grid on Professores is unaffected): one merged
+  grid per Teacher, with real idle time between Segments shown as a
+  "Janela" (Gap, FR-15) cell.
 
 ## Notes
 

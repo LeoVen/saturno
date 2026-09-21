@@ -16,6 +16,8 @@ export interface WeekGridColumn {
 export interface WeekGridRow {
   key: string
   label: string
+  /** Optional CSS class applied to this row's header and every cell in it — e.g. marking a Break row as a visually distinct divider. Consumer-defined; WeekGrid itself attaches no meaning to it. */
+  variant?: string
 }
 
 defineProps<{
@@ -37,8 +39,8 @@ defineProps<{
     </div>
 
     <template v-for="row in rows" :key="row.key">
-      <div class="week-grid-row-header">{{ row.label }}</div>
-      <div v-for="col in columns" :key="col.key" class="week-grid-cell">
+      <div class="week-grid-row-header" :class="row.variant">{{ row.label }}</div>
+      <div v-for="col in columns" :key="col.key" class="week-grid-cell" :class="row.variant">
         <slot name="cell" :column="col" :row="row" />
       </div>
     </template>
