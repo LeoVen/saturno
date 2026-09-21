@@ -309,17 +309,12 @@ mod tests {
         let GenerateResult::Feasible { schedule } = constructor::generate_quick(&input) else {
             panic!("expected feasible");
         };
-        // Group by weekday: no weekday should have 2 placements of "math"
-        // for "c1" since allowSameDayRepetition is false and this isn't a
-        // double-period block.
-        for &weekday in WEEKDAYS.iter() {
-            let count = schedule
-                .placements
-                .iter()
-                .filter(|p| p.weekday == weekday && p.subject_id == "math")
-                .count();
-            assert!(count <= 1, "same-day repetition on {weekday:?}: {count}");
-        }
+        // FR-12's actual rule (and `verify.rs`'s own definition, D-13-style)
+        // is "no more than one contiguous run per day," not "no more than
+        // one placement" — two single periods that happen to land adjacent
+        // still merge into one run and are legitimate. So the authoritative
+        // check here is verify() finding no SameDayRepetition violation,
+        // not a raw per-weekday placement count.
         assert!(verify::verify(&input, &schedule).is_empty());
     }
 
@@ -587,6 +582,60 @@ mod tests {
             elapsed.as_secs() < 10,
             "TR-10 target is a few seconds; took {elapsed:?}"
         );
+        match result {
+            GenerateResult::Feasible { schedule } => {
+                assert!(verify::verify(&input, &schedule).is_empty());
+            }
+            GenerateResult::Infeasible { reason } => {
+                panic!("expected this to be feasible: {}", reason.message)
+            }
+        }
+    }
+
+    #[test]
+    fn same_day_blocks_of_one_assignment_may_merge_when_repetition_is_disallowed() {
+        // Regression test distilled from a real user report: a Teacher
+        // restricted to exactly 2 weekdays, teaching a Subject with an odd
+        // weeklyOccurrences (5) at consecutivePeriods 2 -> blocks [2, 2, 1]
+        // (D-18's floor-division decomposition), with
+        // allowSameDayRepetition false. The only way to fit 3 blocks into 2
+        // available days is for the remainder single to merge adjacently
+        // with one of the doubles into one legitimate 3-period run — which
+        // is allowed (it's still exactly one run for that day, not two),
+        // but the Constructor previously refused to ever place a second
+        // block of the same Subject on a day that already had one, even
+        // when the placement would merge rather than create a second,
+        // separate run. That bug made this genuinely feasible case (and
+        // the real user's much larger schedule) come back infeasible.
+        let mut teacher = teacher("carlos");
+        teacher.unavailability = [Weekday::Mon, Weekday::Thu, Weekday::Fri]
+            .iter()
+            .map(|&weekday| UnavailabilityRange {
+                id: format!("u-{weekday:?}"),
+                weekday,
+                start: "00:00".into(),
+                end: "23:59".into(),
+            })
+            .collect();
+
+        let input = ScheduleInput {
+            segments: vec![segment("ef", 5, 7)],
+            grades: vec![grade("g1", "ef")],
+            classes: vec![class("c1", "g1")],
+            subjects: vec![subject("matematica")],
+            teachers: vec![teacher],
+            assignments: vec![assignment(
+                "a1",
+                "c1",
+                "matematica",
+                &["carlos"],
+                5,
+                2,
+                false,
+            )],
+        };
+
+        let result = constructor::generate_quick(&input);
         match result {
             GenerateResult::Feasible { schedule } => {
                 assert!(verify::verify(&input, &schedule).is_empty());

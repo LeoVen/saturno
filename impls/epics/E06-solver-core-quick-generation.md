@@ -90,3 +90,10 @@ does the thing it exists to do.
   search budget was raised — in response to a user report of a feasible
   school (a 2-day-only Teacher) coming back infeasible. Not independently
   reproduced despite several attempts — see [D-33](../DECISIONS.md).
+- **Retrofit** (2026-09-21): found and fixed the real bug behind D-33's
+  report, using the user's real exported data (E11) — the Constructor was
+  stricter than its own Verifier about same-day repetition, refusing to
+  ever place a second block of an Assignment on a day that already had
+  one, even when the new block would merge adjacently into one legitimate
+  run. Confirmed fixed against the real (fully zero-slack) school: ~74s
+  infeasible before, ~2s feasible after — see [D-35](../DECISIONS.md).

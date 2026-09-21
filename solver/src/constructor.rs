@@ -14,12 +14,10 @@ use std::collections::{HashMap, HashSet};
 
 /// Bounds total backtracking effort so a genuinely hard/degenerate input
 /// still returns within TR-10's "a few seconds" target instead of hanging.
-/// Raised from 500_000 (D-33), alongside the scarce-Teacher-first ordering
-/// heuristic above, in response to a real user report of a feasible school
-/// being reported infeasible — extra backtracking headroom is cheap at
-/// TR-10's scale (see `respects_tr_10_scale_within_a_practical_time_budget`,
-/// still well under a second) even though the exact root cause wasn't
-/// reproduced in isolation.
+/// Raised from 500_000 (D-33) — confirmed against a real user's exported,
+/// fully-saturated (zero-slack) school (D-35) that this is comfortably
+/// enough headroom, completing in ~2s once the same-day-repetition
+/// completeness bug (also D-35) was fixed.
 const SEARCH_BUDGET: u64 = 2_000_000;
 
 struct Task {
@@ -66,10 +64,29 @@ fn build_tasks(input: &ScheduleInput) -> Vec<Task> {
     //   3. Then within a class, fewest candidate Teachers, biggest blocks.
     let teacher_by_id: HashMap<&str, &Teacher> =
         input.teachers.iter().map(|t| (t.id.as_str(), t)).collect();
+    // Every real period taught anywhere in the school (across all Segments)
+    // — a weekday only counts against a Teacher's flexibility if it blocks
+    // at least one of these, so an UnavailabilityRange that only covers a
+    // Break (or otherwise never overlaps an actual Time Slot) doesn't
+    // wrongly flag an otherwise-open day as unusable.
+    let all_periods: Vec<(String, String)> = input
+        .segments
+        .iter()
+        .flat_map(|s| {
+            s.time_slots
+                .iter()
+                .map(|t| (t.start.clone(), t.end.clone()))
+        })
+        .collect();
     let flexibility_cache: HashMap<&str, usize> = input
         .assignments
         .iter()
-        .map(|a| (a.id.as_str(), assignment_flexibility(a, &teacher_by_id)))
+        .map(|a| {
+            (
+                a.id.as_str(),
+                assignment_flexibility(a, &teacher_by_id, &all_periods),
+            )
+        })
         .collect();
     let mut class_total: HashMap<&str, u32> = HashMap::new();
     for a in &input.assignments {
@@ -91,13 +108,24 @@ fn build_tasks(input: &ScheduleInput) -> Vec<Task> {
     tasks
 }
 
-/// How many of the 5 weekdays a Teacher has *no* recorded unavailability on
-/// at all — a cheap, coarse proxy for "how flexible is this Teacher," used
-/// only to order the search (never to prune/reject a candidate).
-fn teacher_open_weekday_count(teacher: &Teacher) -> usize {
+/// How many of the 5 weekdays a Teacher has *at least one real period*
+/// (`all_periods`) free on — a proxy for "how flexible is this Teacher,"
+/// used only to order the search (never to prune/reject a candidate). Checks
+/// actual overlap against real Time Slots rather than just "any
+/// UnavailabilityRange recorded that day," so a Range that only ever covers
+/// a Break (or otherwise never overlaps a real period) doesn't wrongly
+/// flag an otherwise-open day as unusable.
+fn teacher_open_weekday_count(teacher: &Teacher, all_periods: &[(String, String)]) -> usize {
     WEEKDAYS
         .iter()
-        .filter(|&&weekday| !teacher.unavailability.iter().any(|u| u.weekday == weekday))
+        .filter(|&&weekday| {
+            all_periods.iter().any(|(start, end)| {
+                !teacher
+                    .unavailability
+                    .iter()
+                    .any(|u| u.weekday == weekday && ranges_overlap(&u.start, &u.end, start, end))
+            })
+        })
         .count()
 }
 
@@ -109,12 +137,13 @@ fn teacher_open_weekday_count(teacher: &Teacher) -> usize {
 fn assignment_flexibility(
     assignment: &Assignment,
     teacher_by_id: &HashMap<&str, &Teacher>,
+    all_periods: &[(String, String)],
 ) -> usize {
     assignment
         .teacher_ids
         .iter()
         .filter_map(|id| teacher_by_id.get(id.as_str()))
-        .map(|t| teacher_open_weekday_count(t))
+        .map(|t| teacher_open_weekday_count(t, all_periods))
         .max()
         .unwrap_or(0)
 }
@@ -234,6 +263,38 @@ fn merged_run_length(
     len
 }
 
+/// Whether placing a block at `[start, start+size)` would leave at least one
+/// *other* same-subject placement on this day that the block doesn't merge
+/// into (i.e. a genuinely separate run) — the correct test for FR-12's
+/// same-day-repetition rule, per D-13/`verify.rs`'s "more than one run"
+/// definition. This is deliberately *not* "does this day already have any
+/// placement of this Subject" — two blocks of the same Assignment that end
+/// up adjacent merge into a single run (allowed, and still subject to the
+/// FR-10 ceiling check elsewhere), so only a placement that stays disjoint
+/// from every existing same-subject slot actually violates the rule.
+fn would_leave_separate_run(
+    day_entries: &[(usize, String)],
+    start: usize,
+    size: usize,
+    subject_id: &str,
+) -> bool {
+    let mut lo = start;
+    while lo > 0
+        && day_entries
+            .iter()
+            .any(|(i, s)| *i == lo - 1 && s == subject_id)
+    {
+        lo -= 1;
+    }
+    let mut hi = start + size;
+    while day_entries.iter().any(|(i, s)| *i == hi && s == subject_id) {
+        hi += 1;
+    }
+    day_entries
+        .iter()
+        .any(|(i, s)| s == subject_id && (*i < lo || *i >= hi))
+}
+
 fn ranges_overlap(a_start: &str, a_end: &str, b_start: &str, b_end: &str) -> bool {
     crate::model::ranges_overlap(a_start, a_end, b_start, b_end)
 }
@@ -311,11 +372,6 @@ fn candidates_for_task(
     let empty_day: Vec<(usize, String)> = Vec::new();
     for &weekday in WEEKDAYS.iter() {
         let day_entries = by_day.and_then(|m| m.get(&weekday)).unwrap_or(&empty_day);
-        let already_has_subject_today =
-            day_entries.iter().any(|(_, s)| s == &assignment.subject_id);
-        if already_has_subject_today && !assignment.allow_same_day_repetition {
-            continue;
-        }
         for start in 0..=(n - task.block_size as usize) {
             let end = start + task.block_size as usize;
             let slots_free = occupied
@@ -331,6 +387,16 @@ fn candidates_for_task(
                 &assignment.subject_id,
             );
             if merged_len > MAX_CONSECUTIVE_PERIODS as usize {
+                continue;
+            }
+            if !assignment.allow_same_day_repetition
+                && would_leave_separate_run(
+                    day_entries,
+                    start,
+                    task.block_size as usize,
+                    &assignment.subject_id,
+                )
+            {
                 continue;
             }
             let block_times: Vec<(String, String)> = (start..end)
@@ -379,10 +445,6 @@ fn classify_reason(
     let mut any_free_ignoring_teacher = false;
     for &weekday in WEEKDAYS.iter() {
         let day_entries = by_day.and_then(|m| m.get(&weekday)).unwrap_or(&empty_day);
-        let already = day_entries.iter().any(|(_, s)| s == &assignment.subject_id);
-        if already && !assignment.allow_same_day_repetition {
-            continue;
-        }
         for start in 0..=(n - task.block_size as usize) {
             let end = start + task.block_size as usize;
             let free = occupied
@@ -397,9 +459,20 @@ fn classify_reason(
                 task.block_size as usize,
                 &assignment.subject_id,
             );
-            if merged <= MAX_CONSECUTIVE_PERIODS as usize {
-                any_free_ignoring_teacher = true;
+            if merged > MAX_CONSECUTIVE_PERIODS as usize {
+                continue;
             }
+            if !assignment.allow_same_day_repetition
+                && would_leave_separate_run(
+                    day_entries,
+                    start,
+                    task.block_size as usize,
+                    &assignment.subject_id,
+                )
+            {
+                continue;
+            }
+            any_free_ignoring_teacher = true;
         }
     }
     if any_free_ignoring_teacher {

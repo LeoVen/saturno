@@ -558,4 +558,43 @@ Template for a new entry:
 - **Affected epics/tasks**: E11 (all tasks) — the epic's first
   implementation, not a retrofit.
 
+## D-35 — Constructor bug found: same-day blocks of one Assignment couldn't merge
+
+- **Date**: 2026-09-21
+- **Type**: Clarification (corrects a Constructor bug, not a spec change)
+- **Spec refs**: FR-12, FR-14, D-13, D-33
+- **What changes**: root-caused the Beck-style infeasibility report (D-33)
+  using the user's real exported data (thanks to E11's new Export screen).
+  The actual bug: when an Assignment's `weeklyOccurrences` doesn't divide
+  evenly by `consecutivePeriods`, it decomposes into multiple blocks (D-18,
+  e.g. 5 at block-size 2 -> blocks of 2, 2, 1). The Constructor's
+  same-day-repetition check rejected placing a *second* block of that
+  Assignment on any day that already had one, even when the new block
+  would land immediately adjacent and merge into a single legitimate run
+  (≤3 periods, the FR-10 ceiling) — which is exactly what `verify.rs`
+  itself already treats as valid (its rule is "no more than one *run* per
+  day," not "no more than one placement"). The Constructor was stricter
+  than its own Verifier, silently pruning genuinely feasible placements.
+  This was the real school's actual blocker: a Teacher restricted to
+  exactly as many days as their Assignment's block count, solvable only by
+  merging two of those blocks on one day — which the Constructor refused
+  to even try. Fixed by replacing the per-day skip with a precise
+  per-candidate check (`would_leave_separate_run`) matching `verify.rs`'s
+  own definition. Confirmed fixed against the real 8-class, 103-Assignment,
+  **fully zero-slack** (every Class exactly saturated — 30/30, 25/25 —
+  which turns out to be normal real-school usage, not an edge case) export:
+  infeasible for ~74s under the old code, feasible in ~2s after the fix,
+  with `SEARCH_BUDGET` unchanged at D-33's 2,000,000.
+- **Why**: a real, reproducible correctness bug, found by the user sharing
+  their actual (fully saturated) school data — something no synthetic test
+  in this repo had modeled, since every prior test used deliberately
+  "light load" schools. The exported data was used only locally to
+  diagnose and verify the fix — **never committed**, since this repo is
+  public and the export contains real Teachers' names; the permanent
+  regression test (`same_day_blocks_of_one_assignment_may_merge_when_repetition_is_disallowed`)
+  distills the same structural bug with synthetic names instead.
+- **Affected epics/tasks**: E06 (`constructor.rs`), status `done` — a
+  correctness fix to an already-shipped module, not a reopening of the
+  epic's checkpoint.
+
 *(entries above are the most recent)*
