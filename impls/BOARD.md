@@ -45,6 +45,7 @@ each one — called out once here instead of repeated 14 times:
 | E12 | Human-Readable Export | in-progress | Print view and .xlsx match the school's grid format | [epics/E12-human-readable-export.md](epics/E12-human-readable-export.md) |
 | E13 | Deep Search | new | Time-boxed run, live progress, cancel, ranked candidates to choose from | [epics/E13-deep-search.md](epics/E13-deep-search.md) |
 | E14 | Teacher Absence & Repair | new | Mark absence → repair fills/reports vacated slots | [epics/E14-teacher-absence-repair.md](epics/E14-teacher-absence-repair.md) |
+| E15 | Excel Round-Trip Import | in-review | Export "Por Turma" .xlsx, reimport unmodified → new version restored | [epics/E15-excel-round-trip.md](epics/E15-excel-round-trip.md) |
 
 ## Sequencing notes
 
@@ -65,3 +66,9 @@ each one — called out once here instead of repeated 14 times:
   screens, inserted before solver work starts rather than after all 14
   epics — see [D-14](DECISIONS.md). Not FR/TR-traceable, hence the
   `INTERLUDE-N` naming instead of `E<NN>`.
+- **E15 added after the original 14**: user-requested, after using E11/E12
+  in practice — not traceable to a spec FR/TR (E11's native format is
+  explicitly JSON, TR-12; FR.md explicitly scopes legacy spreadsheet import
+  out of v1). Given a real `E<NN>` slot rather than an `INTERLUDE-N` since
+  it's user- and system-visible capability, not a UI-only rework — see
+  [D-41](DECISIONS.md).

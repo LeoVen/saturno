@@ -796,4 +796,62 @@ Template for a new entry:
   Human-Readable Export yet — not this epic's scope, flagged there).
 - **Affected epics/tasks**: E10, all tasks `done`, epic `in-review`.
 
+## D-41 — New epic E15: Excel round-trip, scoped to Saturno's own "Por Turma" export, always creating a new version
+
+- **Date**: 2026-09-21
+- **Type**: New scope (not traceable to a frozen FR/TR), plus a
+  clarification of two spec statements that don't actually cover it.
+- **Spec refs**: TR-12 (native format, JSON, "not meant for
+  hand-editing"), FR.md's "Legacy spreadsheet import... out of scope for
+  v1" line, FR-22/TR-13 (the existing `.xlsx` export this builds on),
+  FR-24 (version-creation convention this follows).
+- **What changes**: the "Por Turma" `.xlsx` (E12/`buildClassGridWorkbook`)
+  now also carries a hidden `veryHidden` worksheet (`xlsxManifest.ts`)
+  recording, for every visible data cell, exactly which
+  (`classId`, `weekday`, `timeSlotId`) it is — written once per data cell
+  as the grid is drawn (`xlsxExport.ts`'s `writeGrid` gained an optional
+  `recordCell` callback), not re-derived at import time from the visible
+  labels or from the current entities' layout. A new pure module,
+  `xlsxImport.ts`, reads that manifest plus the current entities snapshot
+  and reconstructs a `Schedule`: each cell's Teacher/Subject is resolved
+  by exact name (reversing D-17's "(N)" same-name-Teacher suffix), a blank
+  cell means "no placement," and any single unresolvable cell — an
+  unknown name, a renamed/missing sheet, a missing manifest entirely —
+  fails the whole import with every problem listed in one pt-BR error,
+  never a partial or silently-wrong result. A new "Excel (.xlsx)" card on
+  the "Dados" screen (`DataPortabilityView.vue`) wires this to a file
+  input; on success it calls the existing `createFromSchedule` — the same
+  action Generate uses — so import **always creates a new Schedule
+  Version**, never overwrites one (confirmed with the user: repeated
+  export→tweak→reimport cycles are expected to pile up in "Versões" rather
+  than risk clobbering the wrong version). The per-Teacher `.xlsx` stays
+  export-only — it's a derived view of the same data, so round-tripping it
+  too would just be a second, redundant path to the same `Schedule`.
+- **Why**: the user explicitly wants to work with Excel files directly
+  (download, optionally hand-edit Teacher/Subject names or clear cells in
+  Excel, upload back), citing `DEFERRED.md`'s "the exported sheet should
+  match the layout of existing sheets more closely" and "import from an
+  existing excel sheet" notes together. This is **not** the "legacy
+  spreadsheet import" FR.md explicitly scoped out of v1 — that line is
+  about bootstrapping a school's first configuration from an arbitrary,
+  incomplete, real-world file like the ones in `sheets/`; this epic never
+  creates or edits entities, only reconstructs a schedule against entities
+  that already exist, from a file Saturno itself produced. It's also not a
+  second "native format" competing with E11/TR-12 — TR-12's JSON stays the
+  only full-state (entities + constraints + every version + notes) format;
+  `.xlsx` round-trips exactly one Schedule Version's placements, nothing
+  else, and still can't represent Joint Sessions (see Notes below).
+  Position-based cell identity (rather than re-deriving the grid layout
+  from current entities on import) was chosen because entities can drift
+  between export and reimport (a Class renamed, a Time Slot resized) —
+  trusting a manifest written at export time catches that drift as a clear
+  error instead of silently misassigning a cell to the wrong Class or
+  slot.
+- **Affected epics/tasks**: new epic
+  [E15](../epics/E15-excel-round-trip.md), `in-review` — all four tasks
+  `done`, pending the epic's own Human Verification. Touches
+  `xlsxExport.ts`/`xlsxExport.test.ts` (E12, `done`) only to add the
+  manifest-recording callback — no change to that epic's own shipped
+  behavior or checkpoint.
+
 *(entries above are the most recent)*

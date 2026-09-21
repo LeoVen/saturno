@@ -40,7 +40,8 @@ describe('buildClassGridWorkbook', () => {
     const grids = buildClassGridExports(entities, schedule)
     const workbook = buildClassGridWorkbook(grids)
 
-    expect(workbook.worksheets).toHaveLength(1)
+    // E15: plus one hidden re-import manifest sheet (xlsxManifest.test.ts covers its content).
+    expect(workbook.worksheets).toHaveLength(2)
     const sheet = workbook.getWorksheet('Ensino Fundamental')!
     expect(sheet).toBeDefined()
 

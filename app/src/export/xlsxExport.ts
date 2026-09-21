@@ -16,6 +16,13 @@ import type {
   ExportColumn,
   TeacherGridExport,
 } from './scheduleExport'
+import type { Weekday } from '../entities/weekday'
+import {
+  writeManifest,
+  XLSX_MANIFEST_FORMAT_VERSION,
+  type ManifestCell,
+  type ManifestSheet,
+} from './xlsxManifest'
 
 const DAY_BANNER_FILL = 'FFBFDBFE'
 const HEADER_PRIMARY_FILL = 'FF93C5FD'
@@ -50,11 +57,21 @@ function richTextValue(lines: string[]): ExcelJS.CellValue | undefined {
   }
 }
 
+/** E15: invoked for every data (period, not break) cell as it's written, so the caller can build the re-import manifest without re-deriving layout separately. */
+type RecordCell = (
+  row: number,
+  col: number,
+  columnKey: string,
+  weekday: Weekday,
+  timeSlotId: string,
+) => void
+
 function writeGrid(
   sheet: ExcelJS.Worksheet,
   columns: ExportColumn[],
   blocks: ExportBlock[],
   timeColumnWidth = 14,
+  recordCell?: RecordCell,
 ): void {
   sheet.getColumn(1).width = timeColumnWidth
   // Every day-block's columns must be sized, not just the first day's —
@@ -120,8 +137,11 @@ function writeGrid(
       }
 
       col = 2
-      for (const dayCells of gridRow.cellsByDay) {
-        for (const cellContent of dayCells) {
+      for (let d = 0; d < block.days.length; d++) {
+        const weekday = block.days[d]!.weekday
+        const dayCells = gridRow.cellsByDay[d]!
+        for (let ci = 0; ci < dayCells.length; ci++) {
+          const cellContent = dayCells[ci]
           const cell = sheet.getCell(row, col)
           cell.border = THIN_BORDER
           cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
@@ -130,6 +150,9 @@ function writeGrid(
           } else if (cellContent) {
             const value = richTextValue(cellContent.lines)
             if (value !== undefined) cell.value = value
+          }
+          if (gridRow.kind === 'period' && gridRow.timeSlotId && recordCell) {
+            recordCell(row, col, columns[ci]!.key, weekday, gridRow.timeSlotId)
           }
           col++
         }
@@ -142,13 +165,31 @@ function writeGrid(
   }
 }
 
-/** FR-22: one workbook, one sheet per Segment (real schools keep these as separate files per Segment — bundled as sheets here for a single download). */
+/**
+ * FR-22: one workbook, one sheet per Segment (real schools keep these as
+ * separate files per Segment — bundled as sheets here for a single
+ * download). E15: also carries a hidden re-import manifest (see
+ * xlsxManifest.ts) — this is the one workbook shape `xlsxImport.ts` can read
+ * back; `buildTeacherGridWorkbook` stays export-only, it's a derived view of
+ * the same data.
+ */
 export function buildClassGridWorkbook(grids: ClassGridExport[]): ExcelJS.Workbook {
   const workbook = new ExcelJS.Workbook()
+  const manifestSheets: ManifestSheet[] = []
   for (const grid of grids) {
-    const sheet = workbook.addWorksheet(grid.segmentName.slice(0, 31))
-    writeGrid(sheet, grid.columns, grid.blocks)
+    const sheetName = grid.segmentName.slice(0, 31)
+    const sheet = workbook.addWorksheet(sheetName)
+    const cells: ManifestCell[] = []
+    writeGrid(sheet, grid.columns, grid.blocks, 14, (row, col, classId, weekday, timeSlotId) => {
+      cells.push({ row, col, classId, weekday, timeSlotId })
+    })
+    manifestSheets.push({ sheetName, segmentId: grid.segmentId, cells })
   }
+  writeManifest(workbook, {
+    formatVersion: XLSX_MANIFEST_FORMAT_VERSION,
+    kind: 'class-grid',
+    sheets: manifestSheets,
+  })
   return workbook
 }
 
