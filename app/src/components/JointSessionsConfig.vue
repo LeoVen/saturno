@@ -166,7 +166,7 @@ const trackAddError = computed(() => (sessionId: string) => {
         Nenhuma turma cadastrada. Configure em "Séries e Turmas".
       </p>
       <p v-else-if="session.classIds.length" class="muted">
-        Restrita ao mesmo segmento da primeira turma escolhida (FR-25).
+        Restrita ao mesmo segmento da primeira turma escolhida.
       </p>
     </fieldset>
 
