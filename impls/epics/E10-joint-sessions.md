@@ -1,6 +1,6 @@
 # E10 — Joint Sessions
 
-**Status**: in-review
+**Status**: done
 
 ## Goal
 
@@ -103,5 +103,5 @@ sequencing decision on `../BOARD.md`.
   participating Class) and the Track Teacher's Per-Teacher view show the
   session correctly (distinct styling + name on Per-Class; session name +
   Track Subject on Per-Teacher). No console errors. This is agent-driven
-  verification, not the epic's own Human Verification steps — those still
-  need a person to walk them before this epic moves to `done`.
+  verification; the epic's own Human Verification steps were walked
+  through and confirmed by the user (2026-09-21).
