@@ -69,6 +69,24 @@ export const useScheduleVersionsStore = defineStore('scheduleVersions', {
       return version.id
     },
 
+    /**
+     * FR-17 (D-39): start an editable working copy of `id` — like
+     * `duplicate`, but stamped `isDraft: true` so "Ajustar Horário" (the
+     * only screen that ever renders an editable grid) can tell a
+     * deliberately-disposable copy apart from a version the school relies
+     * on, and never risk editing the latter by accident.
+     */
+    startDraft(id: string, name?: string): string | undefined {
+      const source = this.versionById(id)
+      if (!source) return undefined
+      const draftId = this.duplicate(id, name?.trim() || `${source.name} (rascunho)`)
+      if (draftId) {
+        const draft = this.versionById(draftId)
+        if (draft) draft.isDraft = true
+      }
+      return draftId
+    },
+
     rename(id: string, name: string): void {
       const version = this.versionById(id)
       if (version) version.name = name

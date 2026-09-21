@@ -8,6 +8,7 @@ import TeachersConfig from './components/TeachersConfig.vue'
 import AssignmentsConfig from './components/AssignmentsConfig.vue'
 import GenerateView from './components/GenerateView.vue'
 import ScheduleVersionsView from './components/ScheduleVersionsView.vue'
+import AdjustScheduleView from './components/AdjustScheduleView.vue'
 import ViewSchedule from './components/ViewSchedule.vue'
 import ExportView from './components/ExportView.vue'
 import DataPortabilityView from './components/DataPortabilityView.vue'
@@ -23,6 +24,7 @@ const SECTIONS: SidebarSection[] = [
   { key: 'assignments', label: 'Atribuições' },
   { key: 'generate', label: 'Gerar Horário' },
   { key: 'versions', label: 'Versões' },
+  { key: 'adjust', label: 'Ajustar Horário' },
   { key: 'view', label: 'Visualizar Horário' },
   { key: 'export', label: 'Exportar' },
   { key: 'data', label: 'Dados' },
@@ -42,6 +44,7 @@ const activeSection = ref(SECTIONS[0]!.key)
       <AssignmentsConfig v-else-if="activeSection === 'assignments'" />
       <GenerateView v-else-if="activeSection === 'generate'" />
       <ScheduleVersionsView v-else-if="activeSection === 'versions'" />
+      <AdjustScheduleView v-else-if="activeSection === 'adjust'" />
       <ViewSchedule v-else-if="activeSection === 'view'" />
       <ExportView v-else-if="activeSection === 'export'" />
       <DataPortabilityView v-else-if="activeSection === 'data'" />

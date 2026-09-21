@@ -713,4 +713,51 @@ Template for a new entry:
   reopening of that epic's checkpoint; discovered and fixed while
   building E09-T2.
 
+## D-39 — Manual Editing moved to its own screen, always on an explicit draft copy
+
+- **Date**: 2026-09-21
+- **Type**: Clarification (corrects where E09 landed E06-first-pass, after direct user feedback on the shipped result)
+- **Spec refs**: FR-17, FR-18, FR-19, FR-24
+- **What changes**: FR-17's move/swap and FR-19's Notes no longer live on
+  "Visualizar Horário" (E08) — they moved to a new "Ajustar Horário"
+  screen (`AdjustScheduleView.vue`). That screen never edits a version
+  directly: every version gets an "Editar uma cópia" action that creates
+  a new copy via a new `startDraft` store action (thin wrapper around the
+  existing `duplicate`, FR-24) stamped `isDraft: true`
+  (`ScheduleVersion.isDraft`, optional). The editable `ScheduleGrid` +
+  Notes UI on that screen only ever render for
+  `scheduleVersions.activeVersion` when `isDraft` is `true` — structurally
+  guaranteeing a non-draft version can never be edited from this screen,
+  not just by UI convention. A draft already in progress gets "Continuar
+  editando" instead (no further copy) and a "Descartar rascunho" button.
+  "Visualizar Horário" reverted to exactly its pre-E09, read-only shape.
+- **Why**: user feedback, immediately after using the first version — two
+  distinct problems: (1) editing mutated whatever the active version
+  happened to be, in place, with no undo — genuinely risky, since FR-24's
+  existing "Duplicar" only helps if the user remembers to use it *before*
+  editing, and nothing nudged that; (2) "Visualizar Horário" is named and
+  scoped (E08) as a browsing screen — bundling in the ability to change
+  the schedule contradicted its own purpose, and E08/E09 were always
+  separate epics with separate checkpoints ("browse" vs. "hand-tune") that
+  got collapsed into one component for implementation convenience during
+  E09, not because the spec called for it.
+- **Affected epics/tasks**: E08 (`ViewSchedule.vue`), status `done` —
+  reverted to its original shape, not a reopening of its checkpoint. E09,
+  status `in-review` — UI relocated, `movePlacement`/`addNote`/etc. store
+  actions and the underlying `verify`-based conflict flag are unchanged;
+  see the epic file's Human Verification steps, updated to reference
+  "Ajustar Horário" instead of "Visualizar Horário".
+- **Related idea, not built here**: the user also proposed that after a
+  manual edit, a solver-assisted re-solve could fix up the rest of the
+  schedule while treating the manually-arranged placements as pinned —
+  and suggested this screen eventually also host Teacher Absence & Repair
+  (E14), since both are "modify a saved schedule, reconcile the
+  consequences" operations. Recorded as a design sketch in E14's epic
+  file ("Future consideration" section) rather than built now — it's a
+  materially different, more general capability than E14's actual
+  FR-35–37 scope (Repair only ever fills the specific slot(s) a Teacher
+  Absence vacated, with another already-configured Teacher; it never runs
+  the Refiner). Not a confirmed requirement yet — needs its own scoping
+  pass before it becomes an FR.
+
 *(entries above are the most recent)*

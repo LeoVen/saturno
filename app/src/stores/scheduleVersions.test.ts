@@ -170,4 +170,34 @@ describe('scheduleVersions store', () => {
     delete store.versionById(id)!.notes
     expect(store.notesFor(id)).toEqual([])
   })
+
+  it('startDraft creates an independent, isDraft-stamped copy and activates it (D-39)', () => {
+    const store = useScheduleVersionsStore()
+    const originalId = store.createFromSchedule('2026', SAMPLE_SCHEDULE)
+
+    const draftId = store.startDraft(originalId)
+    expect(draftId).toBeDefined()
+    expect(store.versionById(originalId)?.isDraft).toBeFalsy()
+    expect(store.versionById(draftId!)?.isDraft).toBe(true)
+    expect(store.versionById(draftId!)?.name).toBe('2026 (rascunho)')
+    expect(store.activeVersionId).toBe(draftId)
+
+    // Independent copy: editing the draft must never touch the original.
+    store.movePlacement(
+      draftId!,
+      { classId: 'c1', weekday: 'mon', timeSlotId: 'slot1' },
+      { classId: 'c1', weekday: 'tue', timeSlotId: 'slot2' },
+    )
+    expect(store.versionById(originalId)?.schedule.placements).toEqual(SAMPLE_SCHEDULE.placements)
+  })
+
+  it('startDraft accepts a custom name and is a no-op for a non-existent source', () => {
+    const store = useScheduleVersionsStore()
+    const originalId = store.createFromSchedule('2026', SAMPLE_SCHEDULE)
+
+    const draftId = store.startDraft(originalId, 'Minha versão de teste')
+    expect(store.versionById(draftId!)?.name).toBe('Minha versão de teste')
+
+    expect(store.startDraft('missing')).toBeUndefined()
+  })
 })

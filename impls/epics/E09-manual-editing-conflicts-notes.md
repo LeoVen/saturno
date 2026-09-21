@@ -16,8 +16,13 @@ that introduces, and annotate the reason with a note.
 
 ## Human verification
 
-1. Move an assignment to a different slot in the Per-Class view (E08);
-   confirm the grid updates.
+All of the below happen on the new "Ajustar Horário" screen (D-39) — not
+"Visualizar Horário" (E08), which is read-only.
+
+1. On "Ajustar Horário", click "Editar uma cópia" on a saved version;
+   confirm a new version named "{original} (rascunho)" appears and its
+   editable grid opens. Move an assignment to a different slot; confirm
+   the grid updates.
 2. Deliberately move an assignment into a slot that creates a double-booking
    or availability violation; confirm the affected slot(s) are visibly
    flagged, and confirm the edit is still saved (not blocked).
@@ -26,6 +31,12 @@ that introduces, and annotate the reason with a note.
 4. Attach a note to a specific slot and a separate note to the schedule as a
    whole; reload and confirm both persisted, scoped to this Schedule
    Version specifically (not visible from a different version).
+5. Switch to "Visualizar Horário" (or "Versões") and confirm the
+   *original* version the draft was copied from shows no trace of the
+   edit — untouched.
+6. Back on "Ajustar Horário", confirm the draft can be resumed
+   ("Continuar editando") without creating yet another copy, and
+   discarded ("Descartar rascunho") without affecting the original.
 
 ## Tasks
 
@@ -45,6 +56,13 @@ that introduces, and annotate the reason with a note.
   `Violation` enum serializing its fields as snake_case despite the TS side
   assuming camelCase) — both fixed, with a new Rust regression test for the
   second one.
+- See [D-39](../DECISIONS.md) — after using the first version, moved this
+  epic's whole UI off "Visualizar Horário" (E08) onto a new "Ajustar
+  Horário" screen that only ever edits an explicit, `isDraft`-marked copy
+  of a version, never the version itself. Store actions/pure logic
+  (`movePlacement`, `addNote`/`updateNote`/`removeNote`, the conflict-flag
+  mapping) are unchanged — only where the UI lives and how a version
+  becomes editable changed.
 - PRD.md §4's existing FR-18/FR-19 storage decisions (conflict flags never
   persisted; Notes live on the Schedule Version, not entities) stood as
   written — no deviation needed.
@@ -58,10 +76,12 @@ that introduces, and annotate the reason with a note.
   clicking a second cell moves it there, or swaps if that cell is already
   occupied. Only wired into `ScheduleGrid.vue`'s Per-Class view (FR-17's
   own Human Verification step 1 names that view specifically), gated by
-  new `editable`/`versionId` props — `true` only from `ViewSchedule.vue`
-  on the active Schedule Version, `false` (unchanged, read-only) from
-  E06's just-generated preview and anywhere else `ScheduleGrid` is reused,
-  since Notes need a real, saved `versionId` to attach to.
+  `editable`/`versionId` props — `true` only from the new "Ajustar
+  Horário" screen (D-39), and only for a version with `isDraft: true`;
+  `false` (unchanged, read-only) everywhere else `ScheduleGrid` is reused
+  (E06's just-generated preview, "Visualizar Horário"), since Notes need a
+  real, saved `versionId` to attach to and edits need a version that's
+  safe to mutate.
 - FR-18's conflict flag is scoped to whatever `Violation` fields are
   available: exact-match violations (`ClassDoubleBooked`, `TeacherUnavailable`)
   flag the one exact cell; violations that only name a Teacher + weekday
@@ -81,9 +101,14 @@ that introduces, and annotate the reason with a note.
   exactly one place.
 - Verified end-to-end against a small synthetic fixture (not the real
   school export — deliberately built to force a `TeacherDoubleBooked`
-  violation) in a headless-Chromium session: move, swap, live conflict
-  flag appearing/clearing, slot note, whole-schedule note, and all of it
-  surviving a full page reload (real IndexedDB persistence, not just
-  in-memory state). No console errors. This is agent-driven verification,
-  not the epic's own Human Verification steps — those still need a person
-  to walk them before this epic moves to `done`.
+  violation) in a headless-Chromium session, twice: once for the original
+  (E08-hosted) UI — move, swap, live conflict flag appearing/clearing,
+  slot note, whole-schedule note, all surviving a full page reload — and
+  again after D-39's reorg, confirming "Visualizar Horário" is fully
+  read-only (no note buttons, no "Observações" card), "Ajustar Horário"
+  shows no editable grid until a draft is explicitly started, and —
+  critically — the original version is provably untouched (re-activated
+  via "Versões" and inspected) after editing and moving a placement on its
+  draft copy. No console errors in either round. This is agent-driven
+  verification, not the epic's own Human Verification steps — those still
+  need a person to walk them before this epic moves to `done`.

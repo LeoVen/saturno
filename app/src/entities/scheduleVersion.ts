@@ -35,4 +35,13 @@ export interface ScheduleVersion {
   duplicatedFromId?: string
   /** FR-19. Optional — absent on any Schedule Version saved before E09, and on older Native Export Files (TR-8): always read via the store's `notesFor` getter, never this field directly, so that's handled in exactly one place. */
   notes?: ScheduleNote[]
+  /**
+   * Set when this version was created specifically as an editable working
+   * copy ("Ajustar Horário" screen's `startDraft` action) rather than via
+   * plain "Duplicar" (FR-24) — that screen only ever renders
+   * `ScheduleGrid` as `editable` for a version with `isDraft: true`, so a
+   * non-draft (e.g. the school's real, relied-on version) can never be
+   * edited by accident. See D-39.
+   */
+  isDraft?: boolean
 }
