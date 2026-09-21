@@ -46,15 +46,17 @@ const gridGroups = computed(() =>
   })),
 )
 
-/** A placement's real clock time, resolved via its Class's Segment (D-01) — needed to match it to a grid row. */
+/** A placement's Segment id + real clock time, resolved via its Class's Segment (D-01) — needed to match it to a grid row without leaking across Segments that happen to share a clock time (e.g. two Segments both starting 07:00–07:50). */
 function resolvePlacementTime(
   classId: string,
   timeSlotId: string,
-): { start: string; end: string } | undefined {
+): { segmentId: string; start: string; end: string } | undefined {
   const schoolClass = entities.classById(classId)
   const grade = schoolClass ? entities.gradeById(schoolClass.gradeId) : undefined
   const segment = grade ? entities.segmentById(grade.segmentId) : undefined
-  return segment?.timeSlots.find((t) => t.id === timeSlotId)
+  const slot = segment?.timeSlots.find((t) => t.id === timeSlotId)
+  if (!segment || !slot) return undefined
+  return { segmentId: segment.id, start: slot.start, end: slot.end }
 }
 
 interface CellContent {
@@ -62,6 +64,12 @@ interface CellContent {
   subject: string
 }
 
+// Keyed by segmentId too, not just weekday+clock-time: two Segments can
+// define Time Slots with the identical start-end (common when their grids
+// mostly overlap, e.g. EF and EM both running 07:00–07:50), and each
+// Segment gets its own grid-group with its own row for that time. Without
+// the segmentId, a placement from one Segment's grid would also render in
+// the other Segment's grid at the matching row.
 const placementsByCell = computed<Map<string, CellContent>>(() => {
   const map = new Map<string, CellContent>()
   const schedule = props.schedule
@@ -70,7 +78,7 @@ const placementsByCell = computed<Map<string, CellContent>>(() => {
     if (p.teacherId !== selectedTeacherId.value) continue
     const time = resolvePlacementTime(p.classId, p.timeSlotId)
     if (!time) continue
-    map.set(`${p.weekday}:${time.start}-${time.end}`, {
+    map.set(`${time.segmentId}:${p.weekday}:${time.start}-${time.end}`, {
       classLabel: classLabel(p.classId),
       subject: entities.subjectById(p.subjectId)?.name ?? '?',
     })
@@ -78,8 +86,12 @@ const placementsByCell = computed<Map<string, CellContent>>(() => {
   return map
 })
 
-function cellContent(weekday: string, rowKey: string): CellContent | undefined {
-  return placementsByCell.value.get(`${weekday}:${rowKey}`)
+function cellContent(
+  segmentId: string | null,
+  weekday: string,
+  rowKey: string,
+): CellContent | undefined {
+  return placementsByCell.value.get(`${segmentId}:${weekday}:${rowKey}`)
 }
 </script>
 
@@ -100,9 +112,9 @@ function cellContent(weekday: string, rowKey: string): CellContent | undefined {
     <h5 v-if="group.segmentName">{{ group.segmentName }}</h5>
     <WeekGrid :columns="gridColumns" :rows="group.rows">
       <template #cell="{ column, row }">
-        <div v-if="cellContent(column.key, row.key)" class="pill">
-          {{ cellContent(column.key, row.key)!.classLabel }}<br />
-          <small>{{ cellContent(column.key, row.key)!.subject }}</small>
+        <div v-if="cellContent(group.segmentId, column.key, row.key)" class="pill">
+          {{ cellContent(group.segmentId, column.key, row.key)!.classLabel }}<br />
+          <small>{{ cellContent(group.segmentId, column.key, row.key)!.subject }}</small>
         </div>
       </template>
     </WeekGrid>

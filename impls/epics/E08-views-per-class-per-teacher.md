@@ -1,6 +1,6 @@
 # E08 — Views: Per-Class & Per-Teacher
 
-**Status**: in-review
+**Status**: done
 
 ## Goal
 
@@ -38,6 +38,18 @@ per Class, and as a weekly grid per Teacher.
 
 ## Notes
 
+- **Bug found and fixed (2026-09-21)**: `TeacherScheduleGrid.vue`'s cell
+  lookup keyed placements by `weekday:start-end` only. When D-29 switched
+  this view from one merged cross-Segment grid to one grid per Segment, two
+  Segments whose Time Slots happen to share an identical clock time (e.g.
+  both starting 07:00–07:50) could show a placement from one Segment's
+  grid leaking into the other Segment's grid at the matching row — visible
+  to a user as "the same Class showing under both Segments." Verified
+  against real exported school data (a Teacher spanning Ensino
+  Fundamental and Ensino Medio, whose Time Slots overlap at several
+  points in the day): 120 leaked cells across the schedule before the fix,
+  0 after. Fixed by scoping the lookup key by `segmentId` too, matching
+  each grid-group's own Segment rather than a bare clock-time string.
 - `ScheduleGrid.vue` (FR-20, factored out during E07) is reused as-is here;
   `TeacherScheduleGrid.vue` (FR-21) is new. Both are fed a `schedule` prop,
   so E06's just-generated preview, E07's Versions screen, and E08's Views
@@ -50,6 +62,6 @@ per Class, and as a weekly grid per Teacher.
   one Teacher across both Classes; confirmed the Per-Class view shows
   Subject + Teacher, the Per-Teacher view shows both Classes (each with
   Class + Subject) across the week, switching between them never changed
-  the URL, and no console errors. This is agent-driven verification, not
-  the epic's own Human Verification steps — those still need a person to
-  walk them before this epic moves to `done`.
+  the URL, and no console errors.
+- Human Verification steps walked through and confirmed by the user
+  (2026-09-21) — including the leaked-cell bug fix above.

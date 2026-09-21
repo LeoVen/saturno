@@ -1,6 +1,6 @@
 # E07 — Schedule Versions
 
-**Status**: in-review
+**Status**: done
 
 ## Goal
 
@@ -50,6 +50,6 @@ starting point for a new one. This is what Views (E08) and Manual Editing
   the copy to "2026 - rascunho", switched the active version back to
   "2026" (confirmed the grid's heading updated), reloaded the browser, and
   confirmed both versions and the active-version selection persisted. No
-  console errors. This is agent-driven verification, not the epic's own
-  Human Verification steps — those still need a person to walk them before
-  this epic moves to `done`.
+  console errors.
+- Human Verification steps walked through and confirmed by the user
+  (2026-09-21).
