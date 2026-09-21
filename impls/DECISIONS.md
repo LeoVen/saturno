@@ -540,4 +540,22 @@ Template for a new entry:
   correctness refinement to an already-shipped module, not a reopening of
   the epic's checkpoint.
 
+## D-34 — Export/Import: a "Dados" screen with both file and copy/paste paths
+
+- **Date**: 2026-09-21
+- **Type**: Implementation-only
+- **Spec refs**: FR-23, TR-7, TR-12
+- **What changes**: a new "Dados" sidebar section holds Export (a
+  download-file button, a "Copiar JSON" clipboard button, and the JSON
+  itself visible in a read-only textarea) and Import (a file picker and a
+  paste-JSON textarea, either triggering the same `parseImport`). Import
+  replaces every current entity and Schedule Version and is gated behind a
+  native `confirm()` since it's otherwise irreversible from the UI.
+- **Why**: user-requested, specifically to get their real (failing)
+  configuration out of the app as JSON to hand over for solver debugging —
+  the visible/copyable textarea serves that directly, alongside the
+  file-based path FR-23 itself asks for.
+- **Affected epics/tasks**: E11 (all tasks) — the epic's first
+  implementation, not a retrofit.
+
 *(entries above are the most recent)*
