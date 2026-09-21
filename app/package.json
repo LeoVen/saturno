@@ -14,6 +14,7 @@
     "build:wasm": "wasm-pack build ../solver --target web --out-dir ../app/src/wasm/pkg"
   },
   "dependencies": {
+    "exceljs": "^4.4.0",
     "idb": "^8.0.3",
     "pinia": "^4.0.3",
     "vue": "^3.5.42"

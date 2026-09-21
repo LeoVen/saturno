@@ -597,4 +597,38 @@ Template for a new entry:
   correctness fix to an already-shipped module, not a reopening of the
   epic's checkpoint.
 
+## D-36 — Human-Readable Export: new components, not `@media print` on the existing grid components
+
+- **Date**: 2026-09-21
+- **Type**: Implementation-only (corrects an unworkable literal reading of IMPL.md §9)
+- **Spec refs**: FR-22, TR-13, IMPL.md §9
+- **What changes**: IMPL.md §9 describes the printable path as "a
+  `@media print` stylesheet applied to the same grid components used for
+  the on-screen FR-20/21 views." In practice `ScheduleGrid.vue` and
+  `TeacherScheduleGrid.vue` render one Class (or Teacher) at a time,
+  picked from a dropdown, with weekdays as columns — there is no on-screen
+  DOM holding "every Class in a Segment, side by side" the way every real
+  sample sheet in `sheets/` lays it out (columns = Classes, two days
+  stacked per row-block). CSS alone cannot reshape that DOM into the
+  target layout — it would need to duplicate row-header content per day
+  pair and re-key columns from weekdays to Classes, which is a content
+  change, not a stylesheet. Built a new shared view-model instead
+  (`src/export/scheduleExport.ts`, pure/unit-tested per TR-11) plus a new
+  `ExportView.vue` that renders off it directly in the two-days-per-row
+  shape (with its own `@media print` rules for pagination/hiding chrome),
+  and an `.xlsx` builder reading the same view-model. `ScheduleGrid.vue`/
+  `TeacherScheduleGrid.vue` are untouched — they remain the interactive
+  on-screen views (FR-20/21 proper); the export is a separate rendering of
+  the same underlying Schedule Version data, not a print-mode of the same
+  components.
+- **Why**: matching the spec's literal mechanism (`@media print` on the
+  existing components) isn't achievable without content changes CSS can't
+  express, and would produce the wrong layout anyway (one Class at a time
+  instead of the whole-Segment grid every real sample sheet actually
+  shows). The *outcome* IMPL.md §9 and FR-22 actually ask for — output
+  "comparable to the school's existing timetable format" — is what's
+  preserved; only the stated mechanism changes.
+- **Affected epics/tasks**: E12-T1/T2, both `new` at the time of this
+  decision.
+
 *(entries above are the most recent)*

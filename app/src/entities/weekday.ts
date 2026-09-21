@@ -14,6 +14,18 @@ export const WEEKDAY_LABELS: Record<Weekday, string> = {
   fri: 'Sexta',
 }
 
+/** Full pt-BR day names ("Segunda-feira"), matching the real sample sheets' day-header convention (IMPL.md §9) — used only by the Human-Readable Export, not the on-screen grids. */
+export const WEEKDAY_LABELS_FULL: Record<Weekday, string> = {
+  mon: 'Segunda-feira',
+  tue: 'Terça-feira',
+  wed: 'Quarta-feira',
+  thu: 'Quinta-feira',
+  fri: 'Sexta-feira',
+}
+
+/** FR-22/TR-13: the paper-oriented "two days per row" pairing — (Mon,Tue), (Wed,Thu), (Fri alone), matching every real sample sheet in `sheets/`. */
+export const WEEKDAY_EXPORT_PAIRS: Weekday[][] = [['mon', 'tue'], ['wed', 'thu'], ['fri']]
+
 /** Sorts a copy of `items` by weekday (Mon..Fri), then chronologically within a day. */
 export function sortByWeekdayThenStart<T extends { weekday: Weekday; start: string }>(
   items: T[],

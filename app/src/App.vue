@@ -9,6 +9,7 @@ import AssignmentsConfig from './components/AssignmentsConfig.vue'
 import GenerateView from './components/GenerateView.vue'
 import ScheduleVersionsView from './components/ScheduleVersionsView.vue'
 import ViewSchedule from './components/ViewSchedule.vue'
+import ExportView from './components/ExportView.vue'
 import DataPortabilityView from './components/DataPortabilityView.vue'
 
 // INTERLUDE-1-T1: sections are reachable via a persistent sidebar, not one
@@ -23,6 +24,7 @@ const SECTIONS: SidebarSection[] = [
   { key: 'generate', label: 'Gerar Horário' },
   { key: 'versions', label: 'Versões' },
   { key: 'view', label: 'Visualizar Horário' },
+  { key: 'export', label: 'Exportar' },
   { key: 'data', label: 'Dados' },
 ]
 
@@ -41,6 +43,7 @@ const activeSection = ref(SECTIONS[0]!.key)
       <GenerateView v-else-if="activeSection === 'generate'" />
       <ScheduleVersionsView v-else-if="activeSection === 'versions'" />
       <ViewSchedule v-else-if="activeSection === 'view'" />
+      <ExportView v-else-if="activeSection === 'export'" />
       <DataPortabilityView v-else-if="activeSection === 'data'" />
     </main>
   </div>

@@ -1,6 +1,6 @@
 # E12 — Human-Readable Export
 
-**Status**: new
+**Status**: in-progress
 
 ## Goal
 
@@ -32,15 +32,55 @@ use the app — comparable in layout to the school's existing spreadsheets in
 
 | ID | Task | Status |
 |---|---|---|
-| E12-T1 | Shared view-model: lay out a Schedule Version's per-Class/per-Teacher data into the two-days-per-row, breaks-as-dividers shape (IMPL.md §9) | new |
-| E12-T2 | `@media print` stylesheet + print trigger for the on-screen grid components (TR-13) | new |
-| E12-T3 | `.xlsx` generation via `exceljs`: fills, merges, column widths matching the real sample sheets (TR-13) | new |
-| E12-T4 | Notes footnote list + slot-level reference markers, identical in both output paths (FR-19, IMPL.md §9) | new |
+| E12-T1 | Shared view-model: lay out a Schedule Version's per-Class/per-Teacher data into the two-days-per-row, breaks-as-dividers shape (IMPL.md §9) | in-review |
+| E12-T2 | `@media print` stylesheet + print trigger for the on-screen grid components (TR-13) | in-review |
+| E12-T3 | `.xlsx` generation via `exceljs`: fills, merges, column widths matching the real sample sheets (TR-13) | in-review |
+| E12-T4 | Notes footnote list + slot-level reference markers, identical in both output paths (FR-19, IMPL.md §9) | blocked |
 
 ## Decisions
 
-*(none yet)*
+- See [D-36](../DECISIONS.md) — the printable path is a new `ExportView.vue`
+  + `ExportGridTable.vue` reading the shared view-model directly, not a
+  `@media print` stylesheet layered onto `ScheduleGrid.vue`/
+  `TeacherScheduleGrid.vue` as IMPL.md §9 literally describes — those
+  on-screen components show one Class/Teacher at a time with weekdays as
+  columns, which can't be CSS-reshaped into the real sheets' whole-Segment,
+  Classes-as-columns, two-days-per-row layout without a content change.
 
 ## Notes
 
-*(none)*
+- **E12-T4 is blocked on E09, not implemented**: FR-19 Notes (slot-level
+  and whole-schedule) don't exist anywhere yet — no entity, no field on
+  `ScheduleVersion`, no UI to create one (E09 "Manual Editing, Conflicts &
+  Notes" is still `new` on the Board). E12's own Human Verification step 1
+  explicitly requires "a Schedule Version with at least one slot-level note
+  and one whole-schedule note" to exist, which is impossible to satisfy
+  before E09 ships. T1–T3 (the grid layout, print path, and `.xlsx` path)
+  don't depend on Notes and are implemented; T4 (the footnote list +
+  reference markers) is left undone rather than inventing Notes storage
+  here — that's E09's job (E09-T3/T4/T5), and duplicating it in E12 risks
+  a second, conflicting storage decision. Revisit this task once E09 lands
+  a real `notes` array on `ScheduleVersion`; the view-model
+  (`ExportBlock`/`ExportRow` in `scheduleExport.ts`) has no notes-shaped
+  fields yet either, so wiring it in will touch `scheduleExport.ts`,
+  `ExportGridTable.vue`, and `xlsxExport.ts` together.
+- Real sample sheets in `sheets/` (`HorárioEF_24.08.2026_T1.xlsx`) were
+  read directly (via a throwaway `openpyxl` venv, not committed) to match
+  fills/merges/column structure: yellow (`FFFFFF00`) bold day-name banner
+  merged across each day's columns, a two-tone header row (`FFFFCC00` for
+  "Horário", `FFFFFF66` for the Class/Teacher-name cells), Break rows
+  filled solid yellow as the divider, thin borders throughout. The export
+  cell content itself is Subject **and** Teacher (or Class **and**
+  Subject) per FR-20/21/22, even though the real sample sheets show only
+  the Teacher's name per cell (school convention, not a spec requirement)
+  — FR-22 is explicit that both must appear.
+- `exceljs` pulls in a transitively vulnerable `uuid` (GHSA-w5hq-g745-h8pq,
+  moderate) with no non-breaking fix available yet; not exploitable here
+  (client-side only, uuid generation not on any untrusted-input path) —
+  noted rather than downgrading to an older `exceljs`.
+- Verified against the real export data (`export-2026-09-21.json`, not
+  committed — same handling as D-35): imported via the Dados screen into a
+  headless-Chromium session, both Per-Turma and Por Professor modes
+  rendered, `.xlsx` downloaded and re-opened successfully for both modes,
+  no console errors. This is agent-driven verification, not the epic's own
+  Human Verification steps.
