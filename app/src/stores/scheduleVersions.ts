@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
-import type { ScheduleVersion } from '../entities/scheduleVersion'
+import type { ScheduleNote, ScheduleVersion } from '../entities/scheduleVersion'
 import type { Schedule } from '../wasm/types'
+import { movePlacement as movePlacementPure, type SlotRef } from '../entities/manualEdit'
 
 /**
  * TR-5, IMPL.md §7: the schedule-versions store — persisted (via the same
@@ -19,6 +20,20 @@ export const useScheduleVersionsStore = defineStore('scheduleVersions', {
     },
     activeVersion(): ScheduleVersion | undefined {
       return this.versionById(this.activeVersionId)
+    },
+    /** FR-19 — always the safe read path: defaults a pre-E09 (or older-file-imported) Schedule Version's missing `notes` to `[]`, the one place that backward-compatibility default lives. */
+    notesFor(): (versionId: string) => ScheduleNote[] {
+      return (versionId: string): ScheduleNote[] => this.versionById(versionId)?.notes ?? []
+    },
+    /** FR-19: the one Note (if any) attached to this exact slot. */
+    noteForSlot() {
+      return (versionId: string, slot: SlotRef): ScheduleNote | undefined =>
+        this.notesFor(versionId).find(
+          (n) =>
+            n.slot?.classId === slot.classId &&
+            n.slot.weekday === slot.weekday &&
+            n.slot.timeSlotId === slot.timeSlotId,
+        )
     },
   },
   actions: {
@@ -71,6 +86,41 @@ export const useScheduleVersionsStore = defineStore('scheduleVersions', {
       if (!this.versionById(id)) return false
       this.activeVersionId = id
       return true
+    },
+
+    /** FR-17: move (or, if `to` is occupied, swap) a placement within one Class's grid. Never blocked by a Hard Constraint (FR-18 flags conflicts separately, live) — returns whether anything actually changed. */
+    movePlacement(versionId: string, from: SlotRef, to: SlotRef): boolean {
+      const version = this.versionById(versionId)
+      if (!version) return false
+      const result = movePlacementPure(version.schedule, from, to)
+      if (!result) return false
+      version.schedule = result.schedule
+      return result.changed
+    },
+
+    /** FR-19: attach a new Note — pass `slot` for a slot-level Note, omit it for a whole-schedule Note. */
+    addNote(versionId: string, text: string, slot?: SlotRef): string | undefined {
+      const version = this.versionById(versionId)
+      if (!version || !text.trim()) return undefined
+      const note: ScheduleNote = {
+        id: crypto.randomUUID(),
+        text: text.trim(),
+        createdAt: new Date().toISOString(),
+        slot,
+      }
+      version.notes = [...(version.notes ?? []), note]
+      return note.id
+    },
+
+    updateNote(versionId: string, noteId: string, text: string): void {
+      const note = this.versionById(versionId)?.notes?.find((n) => n.id === noteId)
+      if (note && text.trim()) note.text = text.trim()
+    },
+
+    removeNote(versionId: string, noteId: string): void {
+      const version = this.versionById(versionId)
+      if (!version?.notes) return
+      version.notes = version.notes.filter((n) => n.id !== noteId)
     },
   },
 })

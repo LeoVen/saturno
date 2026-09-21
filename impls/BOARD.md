@@ -39,7 +39,7 @@ each one — called out once here instead of repeated 14 times:
 | E06 | Solver Core: Quick Generation | done | Generate click → a valid schedule, or a specific infeasibility reason | [epics/E06-solver-core-quick-generation.md](epics/E06-solver-core-quick-generation.md) |
 | E07 | Schedule Versions | done | Multiple named versions, switch/duplicate | [epics/E07-schedule-versions.md](epics/E07-schedule-versions.md) |
 | E08 | Views: Per-Class & Per-Teacher | done | Browse the saved schedule both ways | [epics/E08-views-per-class-per-teacher.md](epics/E08-views-per-class-per-teacher.md) |
-| E09 | Manual Editing, Conflicts & Notes | new | Move an assignment, see conflicts flagged, attach a note | [epics/E09-manual-editing-conflicts-notes.md](epics/E09-manual-editing-conflicts-notes.md) |
+| E09 | Manual Editing, Conflicts & Notes | in-review | Move an assignment, see conflicts flagged, attach a note | [epics/E09-manual-editing-conflicts-notes.md](epics/E09-manual-editing-conflicts-notes.md) |
 | E10 | Joint Sessions | new | Shared multi-class session schedules correctly, shown distinctly | [epics/E10-joint-sessions.md](epics/E10-joint-sessions.md) |
 | E11 | Native Data Portability | in-review | Export full state, import on a fresh profile, restored | [epics/E11-native-data-portability.md](epics/E11-native-data-portability.md) |
 | E12 | Human-Readable Export | in-progress | Print view and .xlsx match the school's grid format | [epics/E12-human-readable-export.md](epics/E12-human-readable-export.md) |

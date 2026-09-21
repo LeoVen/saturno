@@ -71,7 +71,13 @@ export async function verifySchedule(
   schedule: Schedule,
 ): Promise<Violation[]> {
   const requestId = nextRequestId++
-  const response = await send({ type: 'verify', requestId, input, schedule })
+  // Same reasoning as `buildScheduleInput`: `schedule` is frequently a
+  // Pinia-reactive Proxy (e.g. a Schedule Version's `.schedule`, per E09's
+  // live conflict-flag check) — `postMessage` cannot structured-clone that,
+  // it throws `DataCloneError` at call time, not just a serialization
+  // mismatch.
+  const clonedSchedule = JSON.parse(JSON.stringify(schedule)) as Schedule
+  const response = await send({ type: 'verify', requestId, input, schedule: clonedSchedule })
   if (response.type === 'error') throw new Error(response.message)
   if (response.type !== 'verify') throw new Error('Resposta inesperada do solver.')
   return response.violations

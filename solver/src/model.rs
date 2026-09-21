@@ -170,20 +170,33 @@ pub struct Schedule {
 /// Structured, hard-constraint (FR-14) violations. Every variant carries a
 /// ready-to-display pt-BR `message` (FR-1) plus the structured ids a future
 /// UI can use to highlight the affected cell(s) (FR-18).
+/// `rename_all = "camelCase"` on the enum itself only renames the `type`
+/// tag (e.g. `TeacherDoubleBooked` -> `"teacherDoubleBooked"`) — serde does
+/// NOT cascade it into each struct-like variant's own fields, so every
+/// variant repeats the attribute for its fields (`teacher_id` ->
+/// `teacherId`, etc.) to actually match `app/src/wasm/types.ts`'s
+/// hand-written camelCase `Violation` union. Confirmed the hard way (E09):
+/// without the per-variant attribute, the wasm binary emitted snake_case
+/// field names while the TS side's `Violation` type claimed camelCase,
+/// silently breaking any code that reads a field beyond `.message` — never
+/// caught before because nothing did, until E09's conflict-flag mapping.
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum Violation {
+    #[serde(rename_all = "camelCase")]
     TeacherDoubleBooked {
         teacher_id: String,
         weekday: Weekday,
         message: String,
     },
+    #[serde(rename_all = "camelCase")]
     ClassDoubleBooked {
         class_id: String,
         weekday: Weekday,
         time_slot_id: String,
         message: String,
     },
+    #[serde(rename_all = "camelCase")]
     OccurrenceCountMismatch {
         assignment_id: String,
         class_id: String,
@@ -192,6 +205,7 @@ pub enum Violation {
         actual: u32,
         message: String,
     },
+    #[serde(rename_all = "camelCase")]
     TeacherUnavailable {
         teacher_id: String,
         class_id: String,
@@ -199,12 +213,14 @@ pub enum Violation {
         time_slot_id: String,
         message: String,
     },
+    #[serde(rename_all = "camelCase")]
     ConsecutiveBlockBroken {
         assignment_id: String,
         class_id: String,
         subject_id: String,
         message: String,
     },
+    #[serde(rename_all = "camelCase")]
     ConsecutiveCeilingExceeded {
         class_id: String,
         subject_id: String,
@@ -212,16 +228,19 @@ pub enum Violation {
         run_length: usize,
         message: String,
     },
+    #[serde(rename_all = "camelCase")]
     TeacherDailyLimitExceeded {
         teacher_id: String,
         weekday: Weekday,
         message: String,
     },
+    #[serde(rename_all = "camelCase")]
     TeacherConsecutiveLimitViolated {
         teacher_id: String,
         weekday: Weekday,
         message: String,
     },
+    #[serde(rename_all = "camelCase")]
     SameDayRepetition {
         assignment_id: String,
         class_id: String,
@@ -326,5 +345,34 @@ impl<'a> Index<'a> {
             .get(teacher_id)
             .map(|t| t.name.clone())
             .unwrap_or_else(|| "professor desconhecido".to_string())
+    }
+}
+
+#[cfg(test)]
+mod violation_serialization_tests {
+    use super::{Violation, Weekday};
+
+    /// Regression test for a real bug (found via E09's conflict-flag UI,
+    /// the first code to ever read a `Violation` field beyond `.message`):
+    /// `#[serde(rename_all = "camelCase")]` on the *enum* only renames the
+    /// `type` tag, not each variant's own fields — every variant needs its
+    /// own `#[serde(rename_all = "camelCase")]` too, or the wasm binary
+    /// emits snake_case fields while `app/src/wasm/types.ts`'s hand-written
+    /// `Violation` union claims camelCase, and every field but `.message`
+    /// silently reads as `undefined` on the JS side.
+    #[test]
+    fn every_field_serializes_as_camel_case() {
+        let violation = Violation::TeacherDoubleBooked {
+            teacher_id: "t-1".to_string(),
+            weekday: Weekday::Mon,
+            message: "x".to_string(),
+        };
+        let json = serde_json::to_value(&violation).unwrap();
+        assert_eq!(json["type"], "teacherDoubleBooked");
+        assert_eq!(json["teacherId"], "t-1");
+        assert!(
+            json.get("teacher_id").is_none(),
+            "field must not be snake_case"
+        );
     }
 }

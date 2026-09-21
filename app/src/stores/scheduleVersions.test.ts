@@ -98,4 +98,76 @@ describe('scheduleVersions store', () => {
     expect(store.versions).toHaveLength(0)
     expect(store.activeVersionId).toBe('')
   })
+
+  it('moves a placement within a Class (FR-17)', () => {
+    const store = useScheduleVersionsStore()
+    const id = store.createFromSchedule('2026', SAMPLE_SCHEDULE)
+
+    const changed = store.movePlacement(
+      id,
+      { classId: 'c1', weekday: 'mon', timeSlotId: 'slot1' },
+      { classId: 'c1', weekday: 'tue', timeSlotId: 'slot2' },
+    )
+    expect(changed).toBe(true)
+    expect(store.versionById(id)?.schedule.placements).toEqual([
+      { classId: 'c1', subjectId: 's1', teacherId: 't1', weekday: 'tue', timeSlotId: 'slot2' },
+    ])
+  })
+
+  it('movePlacement on a non-existent version is a no-op', () => {
+    const store = useScheduleVersionsStore()
+    expect(
+      store.movePlacement(
+        'missing',
+        { classId: 'c1', weekday: 'mon', timeSlotId: 'slot1' },
+        { classId: 'c1', weekday: 'tue', timeSlotId: 'slot2' },
+      ),
+    ).toBe(false)
+  })
+
+  it('adds, edits, and removes a slot-level Note (FR-19)', () => {
+    const store = useScheduleVersionsStore()
+    const id = store.createFromSchedule('2026', SAMPLE_SCHEDULE)
+    expect(store.notesFor(id)).toEqual([])
+
+    const slot = { classId: 'c1', weekday: 'mon' as const, timeSlotId: 'slot1' }
+    const noteId = store.addNote(id, 'Professor trocado por indisponibilidade', slot)
+    expect(noteId).toBeDefined()
+    expect(store.notesFor(id)).toHaveLength(1)
+    expect(store.noteForSlot(id, slot)?.text).toBe('Professor trocado por indisponibilidade')
+
+    store.updateNote(id, noteId!, 'Motivo atualizado')
+    expect(store.noteForSlot(id, slot)?.text).toBe('Motivo atualizado')
+
+    store.removeNote(id, noteId!)
+    expect(store.notesFor(id)).toEqual([])
+    expect(store.noteForSlot(id, slot)).toBeUndefined()
+  })
+
+  it('adds a whole-schedule Note (no slot) distinct from a slot-level one', () => {
+    const store = useScheduleVersionsStore()
+    const id = store.createFromSchedule('2026', SAMPLE_SCHEDULE)
+
+    store.addNote(id, 'Observação geral sobre esta versão')
+    store.addNote(id, 'Nota específica', { classId: 'c1', weekday: 'mon', timeSlotId: 'slot1' })
+
+    const notes = store.notesFor(id)
+    expect(notes).toHaveLength(2)
+    expect(notes.filter((n) => !n.slot)).toHaveLength(1)
+    expect(notes.filter((n) => n.slot)).toHaveLength(1)
+  })
+
+  it('ignores an empty/whitespace-only Note', () => {
+    const store = useScheduleVersionsStore()
+    const id = store.createFromSchedule('2026', SAMPLE_SCHEDULE)
+    expect(store.addNote(id, '   ')).toBeUndefined()
+    expect(store.notesFor(id)).toEqual([])
+  })
+
+  it('notesFor defaults to [] for a version with no notes field at all (pre-E09 data)', () => {
+    const store = useScheduleVersionsStore()
+    const id = store.createFromSchedule('2026', SAMPLE_SCHEDULE)
+    delete store.versionById(id)!.notes
+    expect(store.notesFor(id)).toEqual([])
+  })
 })

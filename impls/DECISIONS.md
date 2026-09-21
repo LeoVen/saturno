@@ -672,4 +672,45 @@ Template for a new entry:
   `done` — a UI improvement to an already-shipped screen, not a reopening
   of the epic's checkpoint.
 
+## D-38 — Two real bugs found building E09's live conflict flag (FR-18)
+
+- **Date**: 2026-09-21
+- **Type**: Implementation-only (bug fixes to already-shipped E06 code, found while building a new feature that finally exercised them)
+- **Spec refs**: FR-18, IMPL.md §4.1/§7
+- **What changes**:
+  1. `generationCoordinator.ts`'s `verifySchedule(input, schedule)` never
+     JSON-cloned its `schedule` argument before handing it to
+     `postMessage` — unlike `buildScheduleInput`, which already does this
+     for `input`. Every real call passes a Pinia-reactive `ScheduleVersion.schedule`
+     Proxy, and `postMessage` cannot structured-clone that: it throws
+     `DataCloneError` synchronously, at call time. `ScheduleGrid.vue`'s
+     conflict-flag watcher already wraps the call in `try/catch` (by
+     design, so a `verify` failure never blocks an edit — FR-18), so this
+     failed completely silently: no console error, no visible symptom
+     beyond "the conflict flag never appears." Fixed by cloning `schedule`
+     the same way `input` already was.
+  2. `solver/src/model.rs`'s `Violation` enum has `#[serde(tag = "type",
+     rename_all = "camelCase")]` on the enum itself — which only renames
+     the `type` tag (e.g. `"teacherDoubleBooked"`), not each struct-like
+     variant's own fields. Every variant's fields (`teacher_id`,
+     `class_id`, `time_slot_id`, `run_length`, ...) were serializing as
+     snake_case on the wasm wire, while `app/src/wasm/types.ts`'s
+     hand-written `Violation` TS union claims camelCase throughout. Fixed
+     by adding `#[serde(rename_all = "camelCase")]` to each variant too; a
+     new Rust test (`model::violation_serialization_tests`) asserts the
+     JSON shape directly so this can't silently regress. Wasm rebuilt.
+- **Why**: both bugs are real and have existed since E06 shipped
+  `verify`/`Violation`, but nothing before E09 ever read a `Violation`
+  field beyond `.message` (FR-16's infeasibility report only surfaces
+  `.message` too) or called `verifySchedule` with a live reactive
+  `Schedule` — so both were completely invisible until E09's conflict-flag
+  UI became the first real consumer. Found by browser-driven verification
+  against a small synthetic fixture designed specifically to trigger a
+  `TeacherDoubleBooked` violation (E12-style local dev-server + headless
+  Chromium session, not committed), not by any existing automated test.
+- **Affected epics/tasks**: E06 (`generationCoordinator.ts`, `model.rs`),
+  status `done` — correctness fixes to already-shipped modules, not a
+  reopening of that epic's checkpoint; discovered and fixed while
+  building E09-T2.
+
 *(entries above are the most recent)*
