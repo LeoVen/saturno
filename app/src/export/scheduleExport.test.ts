@@ -59,7 +59,7 @@ describe('buildClassGridExports', () => {
     expect(row2!.kind).toBe('period')
 
     // Monday (day 0) has the placement; Tuesday (day 1) is empty.
-    expect(row1!.cellsByDay[0]![0]).toEqual({ lines: ['Matemática', 'Ana'] })
+    expect(row1!.cellsByDay[0]![0]).toEqual({ lines: ['Ana', 'Matemática'] })
     expect(row1!.cellsByDay[1]![0]).toBeNull()
     // The Break row carries no cell content on either day.
     expect(breakRow!.cellsByDay[0]![0]).toBeNull()
@@ -109,7 +109,7 @@ describe('buildClassGridExports', () => {
     const efCell = efGrid!.blocks[0]!.rows[0]!.cellsByDay[0]![0]
     const emCell = emGrid!.blocks[0]!.rows[0]!.cellsByDay[0]![0]
     expect(efCell).toBeNull()
-    expect(emCell).toEqual({ lines: ['Português', 'Mara'] })
+    expect(emCell).toEqual({ lines: ['Mara', 'Português'] })
   })
 })
 

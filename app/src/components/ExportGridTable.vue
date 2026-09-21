@@ -42,7 +42,7 @@ defineProps<{
           <template v-for="(dayCells, di) in row.cellsByDay" :key="di">
             <td v-for="(cell, ci) in dayCells" :key="ci">
               <template v-if="cell">
-                {{ cell.lines[0] }}
+                <strong class="primary-line">{{ cell.lines[0] }}</strong>
                 <small v-if="cell.lines[1]">{{ cell.lines[1] }}</small>
               </template>
             </td>
@@ -79,36 +79,42 @@ defineProps<{
 }
 
 .day-header-row th {
-  background: #ffff00;
+  background: #bfdbfe;
   font-weight: 700;
   font-size: 0.9rem;
 }
 
 .col-header-row th:first-child {
-  background: #ffcc00;
+  background: #93c5fd;
   font-weight: 700;
 }
 
 .col-header-row th:not(:first-child) {
-  background: #ffff66;
+  background: #dbeafe;
   font-weight: 400;
 }
 
 .time-label {
-  background: #ffff66;
+  background: #dbeafe;
   font-weight: 700;
   white-space: nowrap;
 }
 
 .break-row th,
 .break-row td {
-  background: #ffff00;
+  background: #bfdbfe;
   height: 8px;
   font-size: 0.6rem;
 }
 
+.export-table td .primary-line {
+  display: block;
+  font-size: 0.9rem;
+}
+
 .export-table td small {
   display: block;
+  font-size: 0.7rem;
   color: var(--color-text-muted);
 }
 </style>

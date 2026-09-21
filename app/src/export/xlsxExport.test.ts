@@ -54,16 +54,34 @@ describe('buildClassGridWorkbook', () => {
     expect(sheet.getCell('B2').value).toBe('6º Ano A')
     expect(sheet.getCell('C2').value).toBe('6º Ano B')
 
-    // Row 3: first Time Slot — the Monday placement lands in column B (Class A).
+    // Row 3: first Time Slot — the Monday placement lands in column B (Class A),
+    // Teacher (Ana) as the bigger/bold primary line, Subject smaller beneath it.
     expect(sheet.getCell('A3').value).toBe('07:00–07:50')
-    expect(sheet.getCell('B3').value).toBe('Matemática\nAna')
+    const b3 = sheet.getCell('B3').value as { richText: { font: object; text: string }[] }
+    expect(b3.richText).toEqual([
+      { font: { size: 12, bold: true }, text: 'Ana' },
+      { font: { size: 9, color: { argb: 'FF666666' } }, text: '\nMatemática' },
+    ])
     expect(sheet.getCell('C3').value).toBeNull()
 
     // Row 4: the Break — filled, no value.
     expect(sheet.getCell('A4').value).toBe('07:50–08:00')
     expect(sheet.getCell('B4').value).toBeNull()
     const fill = sheet.getCell('A4').fill
-    expect(fill.type === 'pattern' && fill.fgColor?.argb).toBe('FFFFFF00')
+    expect(fill.type === 'pattern' && fill.fgColor?.argb).toBe('FFBFDBFE')
+  })
+
+  it("sizes every day-block's columns the same, not just the first day's (Tue/Thu's columns were left at Excel's default width)", () => {
+    const entities = makeEntities()
+    const grids = buildClassGridExports(entities, schedule)
+    const workbook = buildClassGridWorkbook(grids)
+    const sheet = workbook.getWorksheet('Ensino Fundamental')!
+
+    // Monday's Class A/B are columns B/C; Tuesday's are D/E (same block, second day).
+    expect(sheet.getColumn(2).width).toBe(18) // Monday, Class A
+    expect(sheet.getColumn(3).width).toBe(18) // Monday, Class B
+    expect(sheet.getColumn(4).width).toBe(18) // Tuesday, Class A
+    expect(sheet.getColumn(5).width).toBe(18) // Tuesday, Class B
   })
 })
 

@@ -1,11 +1,13 @@
 // FR-22, TR-13: `.xlsx` generation for the Human-Readable Export, built off
 // the same view-model as the printable path (scheduleExport.ts, D-36) so
-// the two outputs can't drift apart. Styling (fills, merges, column
-// widths) is matched to the real sample sheets in `sheets/` — inspected
-// directly (HorárioEF_24.08.2026_T1.xlsx): yellow (#FFFF00) bold day-name
-// banner spanning each day's columns, a two-tone header row ("Horário"
-// darker than the Class/Teacher name cells), Break rows filled solid
-// yellow as a divider, thin borders throughout.
+// the two outputs can't drift apart. Layout (fills, merges, column widths)
+// is matched to the real sample sheets in `sheets/` — inspected directly
+// (HorárioEF_24.08.2026_T1.xlsx): a bold day-name banner spanning each
+// day's columns, a two-tone header row ("Horário" darker than the
+// Class/Teacher name cells), Break rows filled solid as a divider, thin
+// borders throughout. Colors are light blue rather than the real sheets'
+// yellow (user request 2026-09-21, "for now" — i.e. not a final palette
+// decision).
 
 import ExcelJS from 'exceljs'
 import type {
@@ -15,18 +17,37 @@ import type {
   TeacherGridExport,
 } from './scheduleExport'
 
-const DAY_BANNER_FILL = 'FFFFFF00'
-const HEADER_PRIMARY_FILL = 'FFFFCC00'
-const HEADER_SECONDARY_FILL = 'FFFFFF66'
+const DAY_BANNER_FILL = 'FFBFDBFE'
+const HEADER_PRIMARY_FILL = 'FF93C5FD'
+const HEADER_SECONDARY_FILL = 'FFDBEAFE'
 const THIN_BORDER: Partial<ExcelJS.Borders> = {
   top: { style: 'thin' },
   bottom: { style: 'thin' },
   left: { style: 'thin' },
   right: { style: 'thin' },
 }
+/** Slightly bigger than the real sample sheets' ~16-wide columns — chosen so real names (e.g. "Educação Física", "Guilherme") fit without every column looking cramped; a long outlier just wraps (TR-13's "comparable," not "auto-fit"). */
+const DATA_COLUMN_WIDTH = 18
 
 function fill(argb: string): ExcelJS.Fill {
   return { type: 'pattern', pattern: 'solid', fgColor: { argb } }
+}
+
+/** `lines[0]` (e.g. the Teacher, per scheduleExport.ts) rendered bigger/bold; any further line smaller and muted — mirrors ExportGridTable.vue's `.primary-line`/`<small>` split so the preview and the .xlsx read the same way. */
+function richTextValue(lines: string[]): ExcelJS.CellValue | undefined {
+  const nonEmpty = lines.filter(Boolean)
+  if (nonEmpty.length === 0) return undefined
+  if (nonEmpty.length === 1) return nonEmpty[0]
+  const [primary, ...rest] = nonEmpty
+  return {
+    richText: [
+      { font: { size: 12, bold: true }, text: primary! },
+      ...rest.map((text) => ({
+        font: { size: 9, color: { argb: 'FF666666' } },
+        text: `\n${text}`,
+      })),
+    ],
+  }
 }
 
 function writeGrid(
@@ -36,9 +57,13 @@ function writeGrid(
   timeColumnWidth = 14,
 ): void {
   sheet.getColumn(1).width = timeColumnWidth
-  columns.forEach((_, i) => {
-    sheet.getColumn(i + 2).width = 16
-  })
+  // Every day-block's columns must be sized, not just the first day's —
+  // blocks pair up to 2 days side by side (Mon+Tue, Wed+Thu; Fri alone),
+  // and each day repeats the same `columns.length` columns.
+  const maxDaysPerBlock = Math.max(1, ...blocks.map((b) => b.days.length))
+  for (let i = 0; i < maxDaysPerBlock * columns.length; i++) {
+    sheet.getColumn(i + 2).width = DATA_COLUMN_WIDTH
+  }
 
   let row = 1
   for (const block of blocks) {
@@ -103,12 +128,13 @@ function writeGrid(
           if (gridRow.kind === 'break') {
             cell.fill = fill(DAY_BANNER_FILL)
           } else if (cellContent) {
-            cell.value = cellContent.lines.filter(Boolean).join('\n')
+            const value = richTextValue(cellContent.lines)
+            if (value !== undefined) cell.value = value
           }
           col++
         }
       }
-      sheet.getRow(row).height = gridRow.kind === 'break' ? 8 : 30
+      sheet.getRow(row).height = gridRow.kind === 'break' ? 8 : 34
       row++
     }
 

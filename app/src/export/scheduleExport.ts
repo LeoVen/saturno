@@ -14,7 +14,7 @@ import type { Segment } from '../entities/segment'
 import type { Weekday } from '../entities/weekday'
 import { WEEKDAY_EXPORT_PAIRS, WEEKDAY_LABELS_FULL } from '../entities/weekday'
 
-/** One cell's display-ready content — at most 2 lines (FR-20's "Subject + Teacher", FR-21's "Class + Subject"). `null` means the slot is unoccupied. */
+/** One cell's display-ready content, `lines[0]` rendered with more emphasis (bigger/bolder) than the rest — for the per-Class grid, Teacher then Subject (FR-20's data, Teacher given the visual priority per user request 2026-09-21); for the per-Teacher grid, Class then Subject (FR-21). `null` means the slot is unoccupied. */
 export interface ExportCell {
   lines: string[]
 }
@@ -146,7 +146,7 @@ export function buildClassGridExports(
       const placement = placementIndex.get(`${classId}:${weekday}:${timeSlotId}`)
       if (!placement) return null
       const subject = entities.subjects.find((s) => s.id === placement.subjectId)?.name ?? '?'
-      return { lines: [subject, teacherLabelFor(entities, placement.teacherId)] }
+      return { lines: [teacherLabelFor(entities, placement.teacherId), subject] }
     }
 
     exports.push({
