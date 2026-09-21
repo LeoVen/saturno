@@ -1,6 +1,6 @@
 # E09 — Manual Editing, Conflicts & Notes
 
-**Status**: in-review
+**Status**: done
 
 ## Goal
 
@@ -42,11 +42,11 @@ All of the below happen on the new "Ajustar Horário" screen (D-39) — not
 
 | ID | Task | Status |
 |---|---|---|
-| E09-T1 | Move/swap an assignment in the grid UI (FR-17) | in-review |
-| E09-T2 | Call `verify` on every relevant render of the affected view and surface violations as a visible flag, without blocking the save (FR-18) | in-review |
-| E09-T3 | Slot-level note: attach/edit/remove free text on one slot (FR-19) | in-review |
-| E09-T4 | Whole-schedule note: attach/edit/remove free text on the Schedule Version as a whole (FR-19) | in-review |
-| E09-T5 | Wire Notes into the schedule-versions store, not the entities store (TR-5, per PRD.md §4's FR-19 storage decision) | in-review |
+| E09-T1 | Move/swap an assignment in the grid UI (FR-17) | done |
+| E09-T2 | Call `verify` on every relevant render of the affected view and surface violations as a visible flag, without blocking the save (FR-18) | done |
+| E09-T3 | Slot-level note: attach/edit/remove free text on one slot (FR-19) | done |
+| E09-T4 | Whole-schedule note: attach/edit/remove free text on the Schedule Version as a whole (FR-19) | done |
+| E09-T5 | Wire Notes into the schedule-versions store, not the entities store (TR-5, per PRD.md §4's FR-19 storage decision) | done |
 
 ## Decisions
 
@@ -110,5 +110,5 @@ All of the below happen on the new "Ajustar Horário" screen (D-39) — not
   critically — the original version is provably untouched (re-activated
   via "Versões" and inspected) after editing and moving a placement on its
   draft copy. No console errors in either round. This is agent-driven
-  verification, not the epic's own Human Verification steps — those still
-  need a person to walk them before this epic moves to `done`.
+  verification, not the epic's own Human Verification steps — those were
+  walked through and confirmed by the user (2026-09-21).
