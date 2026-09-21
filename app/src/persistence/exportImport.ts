@@ -8,6 +8,7 @@ import type { Class } from '../entities/class'
 import type { Subject } from '../entities/subject'
 import type { Teacher } from '../entities/teacher'
 import type { Assignment } from '../entities/assignment'
+import type { JointSession } from '../entities/jointSession'
 import type { ScheduleVersion } from '../entities/scheduleVersion'
 import { CURRENT_SCHEMA_VERSION, applyMigrations } from './migrations'
 
@@ -18,6 +19,8 @@ export interface EntitiesSnapshot {
   subjects: Subject[]
   teachers: Teacher[]
   assignments: Assignment[]
+  /** Optional — absent on any Native Export File from before E10 (TR-8); `normalizeEntities` below defaults it to `[]`, so downstream code can treat it as always present. */
+  jointSessions?: JointSession[]
 }
 
 export interface ScheduleVersionsSnapshot {
@@ -58,6 +61,7 @@ function normalizeEntities(raw: unknown): EntitiesSnapshot {
     subjects: Array.isArray(r.subjects) ? r.subjects : [],
     teachers: Array.isArray(r.teachers) ? r.teachers : [],
     assignments: Array.isArray(r.assignments) ? r.assignments : [],
+    jointSessions: Array.isArray(r.jointSessions) ? r.jointSessions : [],
   }
 }
 

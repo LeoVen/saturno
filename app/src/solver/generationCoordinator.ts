@@ -54,6 +54,7 @@ export function buildScheduleInput(entities: ReturnType<typeof useEntitiesStore>
       subjects: entities.subjects,
       teachers: entities.teachers,
       assignments: entities.assignments,
+      jointSessions: entities.jointSessions,
     }),
   ) as ScheduleInput
 }

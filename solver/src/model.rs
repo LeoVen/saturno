@@ -136,6 +136,35 @@ pub struct Assignment {
     pub allow_same_day_repetition: bool,
 }
 
+/// FR-27: one (Subject, Teacher) pair within a Joint Session. All Tracks of
+/// the same session always run in parallel, at the exact same slot(s) —
+/// unlike `Assignment`, there's a single Teacher per Track, not a pool
+/// (D-12's substitute-pool need is FR-36/Repair-specific and hasn't been
+/// extended to Joint Sessions).
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Track {
+    pub id: String,
+    pub subject_id: String,
+    pub teacher_id: String,
+}
+
+/// FR-25/26/27/28: a shared block attended simultaneously by `class_ids`
+/// (validated same-Segment on the TS side — every participating Class must
+/// resolve through the same Segment for a single `time_slot_id` to mean
+/// the same real time for all of them), with `weekly_occurrences` parallel
+/// occurrences of every Track in `tracks`. No individual-student data
+/// (FR-26) — only which Classes and Teachers are occupied.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JointSession {
+    pub id: String,
+    pub name: String,
+    pub class_ids: Vec<String>,
+    pub tracks: Vec<Track>,
+    pub weekly_occurrences: u32,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ScheduleInput {
@@ -145,6 +174,8 @@ pub struct ScheduleInput {
     pub subjects: Vec<Subject>,
     pub teachers: Vec<Teacher>,
     pub assignments: Vec<Assignment>,
+    #[serde(default)]
+    pub joint_sessions: Vec<JointSession>,
 }
 
 /// One placed period: `classId` has `subjectId` taught by `teacherId` at
@@ -161,10 +192,25 @@ pub struct PlacedPeriod {
     pub time_slot_id: String,
 }
 
+/// FR-25/27/31: one occurrence of a Joint Session — every Class in its
+/// `classIds` and every Track's Teacher are occupied at `weekday`/
+/// `timeSlotId`, but (FR-30) this never satisfies any individual (Class,
+/// Subject) requirement, so it's tracked separately from `placements`
+/// rather than as N `PlacedPeriod`s with a synthetic Subject/Teacher.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JointSessionPlacement {
+    pub joint_session_id: String,
+    pub weekday: Weekday,
+    pub time_slot_id: String,
+}
+
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Schedule {
     pub placements: Vec<PlacedPeriod>,
+    #[serde(default)]
+    pub joint_session_placements: Vec<JointSessionPlacement>,
 }
 
 /// Structured, hard-constraint (FR-14) violations. Every variant carries a
@@ -277,6 +323,7 @@ pub struct Index<'a> {
     pub segment_by_id: HashMap<&'a str, &'a Segment>,
     pub subject_by_id: HashMap<&'a str, &'a Subject>,
     pub teacher_by_id: HashMap<&'a str, &'a Teacher>,
+    pub joint_session_by_id: HashMap<&'a str, &'a JointSession>,
     /// Each Segment's Time Slots, sorted by start time (defensive — the TS
     /// side already keeps these sorted per D-07, but `verify` must stay
     /// correct standalone against arbitrary/edited input, per FR-18).
@@ -297,6 +344,11 @@ impl<'a> Index<'a> {
             segment_by_id: input.segments.iter().map(|s| (s.id.as_str(), s)).collect(),
             subject_by_id: input.subjects.iter().map(|s| (s.id.as_str(), s)).collect(),
             teacher_by_id: input.teachers.iter().map(|t| (t.id.as_str(), t)).collect(),
+            joint_session_by_id: input
+                .joint_sessions
+                .iter()
+                .map(|s| (s.id.as_str(), s))
+                .collect(),
             sorted_slots,
         }
     }
@@ -345,6 +397,18 @@ impl<'a> Index<'a> {
             .get(teacher_id)
             .map(|t| t.name.clone())
             .unwrap_or_else(|| "professor desconhecido".to_string())
+    }
+
+    /// A Joint Session's shared Time Slots, resolved via its first
+    /// participating Class — every Class in `class_ids` is validated
+    /// same-Segment (FR-25) on the TS side, so any of them resolves the
+    /// same slot structure.
+    pub fn slots_of_joint_session(&self, session: &JointSession) -> &[&'a TimeSlot] {
+        session
+            .class_ids
+            .first()
+            .map(|c| self.slots_of_class(c))
+            .unwrap_or(&[])
     }
 }
 

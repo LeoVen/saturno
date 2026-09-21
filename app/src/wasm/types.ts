@@ -34,6 +34,14 @@ export interface ScheduleInput {
     consecutivePeriods: number
     allowSameDayRepetition: boolean
   }[]
+  /** Optional for the same reason `Schedule.jointSessionPlacements` is — omit entirely and the wasm boundary's `#[serde(default)]` treats it as empty. */
+  jointSessions?: {
+    id: string
+    name: string
+    classIds: string[]
+    tracks: { id: string; subjectId: string; teacherId: string }[]
+    weeklyOccurrences: number
+  }[]
 }
 
 export interface PlacedPeriod {
@@ -44,8 +52,17 @@ export interface PlacedPeriod {
   timeSlotId: string
 }
 
+/** FR-25/27/31: one occurrence of a Joint Session — every participating Class and every Track Teacher occupied at `weekday`/`timeSlotId`, tracked separately from `placements` since it never satisfies a (Class, Subject) requirement (FR-30). */
+export interface JointSessionPlacement {
+  jointSessionId: string
+  weekday: Weekday
+  timeSlotId: string
+}
+
 export interface Schedule {
   placements: PlacedPeriod[]
+  /** Optional — absent on any Schedule saved before E10 (pre-existing IndexedDB data, older Native Export Files per TR-8); always read as `?? []`, never assumed present. Always populated (possibly `[]`) on a fresh `generateQuick`/`verify` result. */
+  jointSessionPlacements?: JointSessionPlacement[]
 }
 
 /** FR-14 hard-constraint violations (solver/src/model.rs's `Violation` enum, tagged by `type`). */

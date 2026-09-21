@@ -885,3 +885,137 @@ describe('entities store — FR-13 validation getters', () => {
     expect(store.zeroOverlapAssignments).toEqual([])
   })
 })
+
+describe('entities store — Joint Sessions (FR-25-31)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('adds, renames, and removes a Joint Session', () => {
+    const store = useEntitiesStore()
+    const id = store.addJointSession('Itinerários')
+    expect(store.jointSessions).toHaveLength(1)
+    expect(store.jointSessionById(id)?.name).toBe('Itinerários')
+    expect(store.jointSessionById(id)?.weeklyOccurrences).toBe(1)
+
+    store.renameJointSession(id, 'Itinerários Formativos')
+    expect(store.jointSessionById(id)?.name).toBe('Itinerários Formativos')
+
+    store.removeJointSession(id)
+    expect(store.jointSessions).toHaveLength(0)
+  })
+
+  it('sets weekly occurrences, rejecting non-positive/non-integer values', () => {
+    const store = useEntitiesStore()
+    const id = store.addJointSession('Itinerários')
+    expect(store.setJointSessionWeeklyOccurrences(id, 3)).toBe(true)
+    expect(store.jointSessionById(id)?.weeklyOccurrences).toBe(3)
+    expect(store.setJointSessionWeeklyOccurrences(id, 0)).toBe(false)
+    expect(store.setJointSessionWeeklyOccurrences(id, 1.5)).toBe(false)
+  })
+
+  it('FR-25: adds participating Classes from the same Segment, rejects a different Segment', () => {
+    const store = useEntitiesStore()
+    const { gradeId } = setUpSegmentWithClass(store, 4)
+    const classA = store.classesByGrade(gradeId)[0]!.id
+    const classB = store.addClass(gradeId, '7º Ano B') as string
+    const otherSegmentId = store.addSegment('Ensino Médio')
+    const otherGradeId = store.addGrade(otherSegmentId, '1ª Série') as string
+    const classC = store.addClass(otherGradeId, '1ª Série A') as string
+
+    const sessionId = store.addJointSession('Itinerários')
+    expect(store.addJointSessionClass(sessionId, classA)).toBe(true)
+    expect(store.addJointSessionClass(sessionId, classB)).toBe(true)
+    expect(store.addJointSessionClass(sessionId, classC)).toBe(false)
+    expect(store.jointSessionById(sessionId)?.classIds).toEqual([classA, classB])
+
+    // Duplicate add is a no-op failure, not a second entry.
+    expect(store.addJointSessionClass(sessionId, classA)).toBe(false)
+    expect(store.jointSessionById(sessionId)?.classIds).toHaveLength(2)
+
+    store.removeJointSessionClass(sessionId, classA)
+    expect(store.jointSessionById(sessionId)?.classIds).toEqual([classB])
+  })
+
+  it('FR-27: adds Tracks, rejecting a Teacher already staffing another Track of the same session', () => {
+    const store = useEntitiesStore()
+    const subjectA = store.addSubject('Ciências Humanas')
+    const subjectB = store.addSubject('Linguagens')
+    const teacherA = store.addTeacher('Ana')
+    const teacherB = store.addTeacher('Beto')
+    const sessionId = store.addJointSession('Itinerários')
+
+    const trackId = store.addTrack(sessionId, subjectA, teacherA)
+    expect(trackId).toBeDefined()
+    expect(store.addTrack(sessionId, subjectB, teacherA)).toBeUndefined()
+    expect(store.addTrack(sessionId, subjectB, teacherB)).toBeDefined()
+    expect(store.jointSessionById(sessionId)?.tracks).toHaveLength(2)
+
+    expect(store.setTrackTeacher(sessionId, trackId!, teacherB)).toBe(false)
+    expect(store.setTrackSubject(sessionId, trackId!, subjectB)).toBe(true)
+    expect(store.jointSessionById(sessionId)?.tracks[0]?.subjectId).toBe(subjectB)
+
+    store.removeTrack(sessionId, trackId!)
+    expect(store.jointSessionById(sessionId)?.tracks).toHaveLength(1)
+  })
+
+  it('a Class removal prunes it from every Joint Session, without deleting the session', () => {
+    const store = useEntitiesStore()
+    const { gradeId } = setUpSegmentWithClass(store, 4)
+    const classA = store.classesByGrade(gradeId)[0]!.id
+    const sessionId = store.addJointSession('Itinerários')
+    store.addJointSessionClass(sessionId, classA)
+
+    store.removeClass(classA)
+    expect(store.jointSessionById(sessionId)?.classIds).toEqual([])
+    expect(store.jointSessions).toHaveLength(1)
+  })
+
+  it('a Segment removal cascades to prune every participating Class it took with it', () => {
+    const store = useEntitiesStore()
+    const { segmentId, gradeId } = setUpSegmentWithClass(store, 4)
+    const classA = store.classesByGrade(gradeId)[0]!.id
+    const sessionId = store.addJointSession('Itinerários')
+    store.addJointSessionClass(sessionId, classA)
+
+    store.removeSegment(segmentId)
+    expect(store.jointSessionById(sessionId)?.classIds).toEqual([])
+  })
+
+  it('removing a Subject removes just the matching Track(s), not the whole session', () => {
+    const store = useEntitiesStore()
+    const subjectId = store.addSubject('Ciências Humanas')
+    const teacherId = store.addTeacher('Ana')
+    const sessionId = store.addJointSession('Itinerários')
+    store.addTrack(sessionId, subjectId, teacherId)
+
+    store.removeSubject(subjectId)
+    expect(store.jointSessionById(sessionId)?.tracks).toEqual([])
+    expect(store.jointSessions).toHaveLength(1)
+  })
+
+  it('removing a Teacher removes just the matching Track(s), not the whole session', () => {
+    const store = useEntitiesStore()
+    const subjectId = store.addSubject('Ciências Humanas')
+    const teacherId = store.addTeacher('Ana')
+    const sessionId = store.addJointSession('Itinerários')
+    store.addTrack(sessionId, subjectId, teacherId)
+
+    store.removeTeacher(teacherId)
+    expect(store.jointSessionById(sessionId)?.tracks).toEqual([])
+  })
+
+  it("FR-30: a Joint Session's weekly occurrences count against a Class's period budget, without an Assignment", () => {
+    const store = useEntitiesStore()
+    const { classId } = setUpSegmentWithClass(store, 2) // 10 available/week
+    const sessionId = store.addJointSession('Itinerários')
+    store.addJointSessionClass(sessionId, classId)
+    store.setJointSessionWeeklyOccurrences(sessionId, 3)
+
+    expect(store.classLoads).toEqual([{ classId, requiredWeekly: 3, availableWeekly: 10 }])
+    expect(store.overloadedClasses).toEqual([])
+
+    store.setJointSessionWeeklyOccurrences(sessionId, 11)
+    expect(store.overloadedClasses).toEqual([{ classId, requiredWeekly: 11, availableWeekly: 10 }])
+  })
+})

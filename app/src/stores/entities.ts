@@ -7,6 +7,7 @@ import type { Teacher, UnavailabilityRange } from '../entities/teacher'
 import type { Weekday } from '../entities/weekday'
 import type { Assignment } from '../entities/assignment'
 import { MAX_CONSECUTIVE_PERIODS } from '../entities/assignment'
+import type { JointSession, Track } from '../entities/jointSession'
 import { hourlyPeriods, isValidRange, sortByStart, subtractRange } from '../entities/time'
 import type { TimeRangeValue } from '../entities/time'
 import { sortByWeekdayThenStart } from '../entities/weekday'
@@ -45,6 +46,7 @@ export const useEntitiesStore = defineStore('entities', {
     subjects: [] as Subject[],
     teachers: [] as Teacher[],
     assignments: [] as Assignment[],
+    jointSessions: [] as JointSession[],
   }),
   getters: {
     segmentById: (state) => {
@@ -142,19 +144,40 @@ export const useEntitiesStore = defineStore('entities', {
         return allWeeklyPeriods(segment?.timeSlots ?? [])
       }
     },
+    /** A Class's Segment, resolved via its Grade — `undefined` if the chain is broken. */
+    segmentOfClass() {
+      return (classId: string): Segment | undefined => {
+        const schoolClass = this.classById(classId)
+        const grade = schoolClass ? this.gradeById(schoolClass.gradeId) : undefined
+        return grade ? this.segmentById(grade.segmentId) : undefined
+      }
+    },
+    jointSessionById: (state) => {
+      return (id: string): JointSession | undefined => state.jointSessions.find((s) => s.id === id)
+    },
+    /** FR-25: every Joint Session a Class participates in — used both for display and to cascade a Class's removal. */
+    jointSessionsForClass: (state) => {
+      return (classId: string): JointSession[] =>
+        state.jointSessions.filter((s) => s.classIds.includes(classId))
+    },
+    /** FR-30: a Class's total weekly Joint Session occurrences — counts against its period budget (FR-13) without satisfying any (Class, Subject) requirement. */
+    jointSessionLoadForClass() {
+      return (classId: string): number =>
+        this.jointSessionsForClass(classId).reduce((sum, s) => sum + s.weeklyOccurrences, 0)
+    },
     /**
-     * Every Class's current weekly load: total Assignment occurrences vs.
-     * its Segment's available periods — the same figures FR-13's overload
-     * check compares, surfaced for every Class (not just overloaded ones)
-     * so the Assignments screen can show a sanity-check summary.
+     * Every Class's current weekly load: total Assignment occurrences plus
+     * Joint Session occurrences (FR-30) vs. its Segment's available
+     * periods — the same figures FR-13's overload check compares,
+     * surfaced for every Class (not just overloaded ones) so the
+     * Assignments screen can show a sanity-check summary.
      */
     classLoads(): ClassLoad[] {
       return this.classes.map((c) => ({
         classId: c.id,
-        requiredWeekly: this.assignmentsByClass(c.id).reduce(
-          (sum, a) => sum + a.weeklyOccurrences,
-          0,
-        ),
+        requiredWeekly:
+          this.assignmentsByClass(c.id).reduce((sum, a) => sum + a.weeklyOccurrences, 0) +
+          this.jointSessionLoadForClass(c.id),
         availableWeekly: this.classWeeklyPeriods(c.id).length,
       }))
     },
@@ -199,6 +222,7 @@ export const useEntitiesStore = defineStore('entities', {
       this.grades = this.grades.filter((g) => !orphanedGradeIds.has(g.id))
       this.classes = this.classes.filter((c) => !orphanedGradeIds.has(c.gradeId))
       this.assignments = this.assignments.filter((a) => !orphanedClassIds.has(a.classId))
+      this.pruneJointSessionClasses(orphanedClassIds)
     },
 
     addTimeSlot(segmentId: string, start: string, end: string): string | undefined {
@@ -266,6 +290,7 @@ export const useEntitiesStore = defineStore('entities', {
       const orphanedClassIds = new Set(this.classesByGrade(id).map((c) => c.id))
       this.classes = this.classes.filter((c) => c.gradeId !== id)
       this.assignments = this.assignments.filter((a) => !orphanedClassIds.has(a.classId))
+      this.pruneJointSessionClasses(orphanedClassIds)
     },
 
     /**
@@ -294,6 +319,14 @@ export const useEntitiesStore = defineStore('entities', {
     removeClass(id: string): void {
       this.classes = this.classes.filter((c) => c.id !== id)
       this.assignments = this.assignments.filter((a) => a.classId !== id)
+      this.pruneJointSessionClasses(new Set([id]))
+    },
+
+    /** FR-25: a Joint Session outlives a removed Class — it just drops that one Class from `classIds`, same "outlives, loses just the one link" pattern as `removeTeacher`/`removeSubject` on an Assignment. */
+    pruneJointSessionClasses(removedClassIds: Set<string>): void {
+      for (const session of this.jointSessions) {
+        session.classIds = session.classIds.filter((cid) => !removedClassIds.has(cid))
+      }
     },
 
     addSubject(name: string): string {
@@ -312,6 +345,12 @@ export const useEntitiesStore = defineStore('entities', {
       this.assignments = this.assignments.filter((a) => a.subjectId !== id)
       for (const teacher of this.teachers) {
         teacher.subjectIds = (teacher.subjectIds ?? []).filter((sid) => sid !== id)
+      }
+      // A Track *is* one (Subject, Teacher) pair (FR-27) — unlike an
+      // Assignment's teacherIds list, there's no partial link to drop, so
+      // the whole Track goes with its Subject.
+      for (const session of this.jointSessions) {
+        session.tracks = session.tracks.filter((t) => t.subjectId !== id)
       }
     },
 
@@ -340,6 +379,11 @@ export const useEntitiesStore = defineStore('entities', {
       // link from teacherIds (FR-9), rather than being deleted outright.
       for (const assignment of this.assignments) {
         assignment.teacherIds = assignment.teacherIds.filter((tid) => tid !== id)
+      }
+      // A Track has exactly one Teacher (FR-27, no substitute pool like
+      // Assignment's teacherIds) — removed with its Teacher.
+      for (const session of this.jointSessions) {
+        session.tracks = session.tracks.filter((t) => t.teacherId !== id)
       }
     },
 
@@ -579,6 +623,100 @@ export const useEntitiesStore = defineStore('entities', {
       const assignment = this.assignmentById(assignmentId)
       if (!assignment) return
       assignment.teacherIds = assignment.teacherIds.filter((id) => id !== teacherId)
+    },
+
+    /** FR-25/28. Starts with no participating Classes/Tracks — the user adds them next. */
+    addJointSession(name: string): string {
+      const session: JointSession = {
+        id: crypto.randomUUID(),
+        name,
+        classIds: [],
+        tracks: [],
+        weeklyOccurrences: 1,
+      }
+      this.jointSessions.push(session)
+      return session.id
+    },
+
+    renameJointSession(id: string, name: string): void {
+      const session = this.jointSessionById(id)
+      if (session) session.name = name
+    },
+
+    removeJointSession(id: string): void {
+      this.jointSessions = this.jointSessions.filter((s) => s.id !== id)
+    },
+
+    setJointSessionWeeklyOccurrences(id: string, weeklyOccurrences: number): boolean {
+      const session = this.jointSessionById(id)
+      if (!session || !Number.isInteger(weeklyOccurrences) || weeklyOccurrences < 1) return false
+      session.weeklyOccurrences = weeklyOccurrences
+      return true
+    },
+
+    /**
+     * FR-25: every participating Class must belong to the same Segment —
+     * a Joint Session's Time Slots only mean one real time for every
+     * Class when they share a Segment's structure (FR-5). Rejects a Class
+     * from a different Segment than the session's existing participants,
+     * or one already in the session.
+     */
+    addJointSessionClass(sessionId: string, classId: string): boolean {
+      const session = this.jointSessionById(sessionId)
+      const schoolClass = this.classById(classId)
+      if (!session || !schoolClass) return false
+      if (session.classIds.includes(classId)) return false
+      const newSegment = this.segmentOfClass(classId)
+      if (!newSegment) return false
+      const existingSegmentIds = new Set(
+        session.classIds
+          .map((cid) => this.segmentOfClass(cid)?.id)
+          .filter((sid): sid is string => sid !== undefined),
+      )
+      if (existingSegmentIds.size > 0 && !existingSegmentIds.has(newSegment.id)) return false
+      session.classIds.push(classId)
+      return true
+    },
+
+    removeJointSessionClass(sessionId: string, classId: string): void {
+      const session = this.jointSessionById(sessionId)
+      if (!session) return
+      session.classIds = session.classIds.filter((cid) => cid !== classId)
+    },
+
+    /** FR-27. Rejects a Teacher already teaching another Track of the same session — every Track runs at the exact same slot(s), so one Teacher can never staff two at once. */
+    addTrack(sessionId: string, subjectId: string, teacherId: string): string | undefined {
+      const session = this.jointSessionById(sessionId)
+      if (!session || !this.subjectById(subjectId) || !this.teacherById(teacherId)) {
+        return undefined
+      }
+      if (session.tracks.some((t) => t.teacherId === teacherId)) return undefined
+      const track: Track = { id: crypto.randomUUID(), subjectId, teacherId }
+      session.tracks.push(track)
+      return track.id
+    },
+
+    removeTrack(sessionId: string, trackId: string): void {
+      const session = this.jointSessionById(sessionId)
+      if (!session) return
+      session.tracks = session.tracks.filter((t) => t.id !== trackId)
+    },
+
+    setTrackSubject(sessionId: string, trackId: string, subjectId: string): boolean {
+      const session = this.jointSessionById(sessionId)
+      const track = session?.tracks.find((t) => t.id === trackId)
+      if (!track || !this.subjectById(subjectId)) return false
+      track.subjectId = subjectId
+      return true
+    },
+
+    setTrackTeacher(sessionId: string, trackId: string, teacherId: string): boolean {
+      const session = this.jointSessionById(sessionId)
+      const track = session?.tracks.find((t) => t.id === trackId)
+      if (!session || !track || !this.teacherById(teacherId)) return false
+      if (session.tracks.some((t) => t.id !== trackId && t.teacherId === teacherId)) return false
+      track.teacherId = teacherId
+      return true
     },
   },
 })

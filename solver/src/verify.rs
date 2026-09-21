@@ -4,8 +4,8 @@
 //! FR-18) and internally by the Constructor to prune invalid placements.
 
 use crate::model::{
-    Assignment, GenerateResult, Index, MAX_CONSECUTIVE_PERIODS, PlacedPeriod, Schedule,
-    ScheduleInput, Violation, Weekday, ranges_overlap,
+    Assignment, GenerateResult, Index, JointSession, MAX_CONSECUTIVE_PERIODS, PlacedPeriod,
+    Schedule, ScheduleInput, Violation, Weekday, ranges_overlap,
 };
 use std::collections::HashMap;
 
@@ -45,9 +45,41 @@ fn resolve(idx: &Index, schedule: &Schedule) -> Vec<Resolved> {
         .collect()
 }
 
+/// A Joint Session occurrence with its shared real clock time resolved —
+/// analogous to `Resolved`, but one entry per occurrence, not per
+/// participating Class/Track (FR-29's checks below expand it per Class or
+/// per Track Teacher as needed).
+struct JointResolved<'a> {
+    session: &'a JointSession,
+    weekday: Weekday,
+    time_slot_id: String,
+    start: String,
+    end: String,
+}
+
+fn resolve_joint<'a>(idx: &Index<'a>, schedule: &Schedule) -> Vec<JointResolved<'a>> {
+    schedule
+        .joint_session_placements
+        .iter()
+        .filter_map(|p| {
+            let session = *idx.joint_session_by_id.get(p.joint_session_id.as_str())?;
+            let slots = idx.slots_of_joint_session(session);
+            let slot = slots.iter().find(|s| s.id == p.time_slot_id)?;
+            Some(JointResolved {
+                session,
+                weekday: p.weekday,
+                time_slot_id: p.time_slot_id.clone(),
+                start: slot.start.clone(),
+                end: slot.end.clone(),
+            })
+        })
+        .collect()
+}
+
 pub fn verify(input: &ScheduleInput, schedule: &Schedule) -> Vec<Violation> {
     let idx = Index::build(input);
     let resolved = resolve(&idx, schedule);
+    let joint_resolved = resolve_joint(&idx, schedule);
     let mut violations = Vec::new();
 
     check_class_double_booking(&idx, &resolved, &mut violations);
@@ -56,8 +88,85 @@ pub fn verify(input: &ScheduleInput, schedule: &Schedule) -> Vec<Violation> {
     check_teacher_availability(&idx, &resolved, &mut violations);
     check_teacher_limits(&idx, &resolved, &mut violations);
     check_runs(&idx, input, &resolved, &mut violations);
+    check_joint_session_conflicts(&idx, &resolved, &joint_resolved, &mut violations);
 
     violations
+}
+
+/// FR-29: every participating Class and every Track Teacher of a Joint
+/// Session occurrence must be simultaneously free of any other assignment
+/// — including any other Joint Session occurrence — at that slot. Reuses
+/// `ClassDoubleBooked`/`TeacherDoubleBooked` (rather than a new Violation
+/// variant) since it's the same violation from the user's point of view,
+/// just sourced from a Joint Session instead of a normal placement.
+fn check_joint_session_conflicts(
+    idx: &Index,
+    resolved: &[Resolved],
+    joint_resolved: &[JointResolved],
+    out: &mut Vec<Violation>,
+) {
+    for (i, jr) in joint_resolved.iter().enumerate() {
+        for class_id in &jr.session.class_ids {
+            let conflicts_normal = resolved.iter().any(|r| {
+                &r.class_id == class_id
+                    && r.weekday == jr.weekday
+                    && ranges_overlap(&jr.start, &jr.end, &r.start, &r.end)
+            });
+            let conflicts_joint = joint_resolved.iter().enumerate().any(|(j, other)| {
+                j != i
+                    && other.session.class_ids.contains(class_id)
+                    && other.weekday == jr.weekday
+                    && ranges_overlap(&jr.start, &jr.end, &other.start, &other.end)
+            });
+            if conflicts_normal || conflicts_joint {
+                out.push(Violation::ClassDoubleBooked {
+                    class_id: class_id.clone(),
+                    weekday: jr.weekday,
+                    time_slot_id: jr.time_slot_id.clone(),
+                    message: format!(
+                        "A turma {} tem a sessão conjunta \"{}\" e outro compromisso no mesmo horário ({}, {}–{}).",
+                        idx.class_label(class_id),
+                        jr.session.name,
+                        jr.weekday.label_ptbr(),
+                        jr.start,
+                        jr.end
+                    ),
+                });
+            }
+        }
+
+        for track in &jr.session.tracks {
+            let conflicts_normal = resolved.iter().any(|r| {
+                r.teacher_id == track.teacher_id
+                    && r.weekday == jr.weekday
+                    && ranges_overlap(&jr.start, &jr.end, &r.start, &r.end)
+            });
+            let conflicts_joint = joint_resolved.iter().enumerate().any(|(j, other)| {
+                j != i
+                    && other
+                        .session
+                        .tracks
+                        .iter()
+                        .any(|t| t.teacher_id == track.teacher_id)
+                    && other.weekday == jr.weekday
+                    && ranges_overlap(&jr.start, &jr.end, &other.start, &other.end)
+            });
+            if conflicts_normal || conflicts_joint {
+                out.push(Violation::TeacherDoubleBooked {
+                    teacher_id: track.teacher_id.clone(),
+                    weekday: jr.weekday,
+                    message: format!(
+                        "O professor {} está alocado na sessão conjunta \"{}\" e em outro compromisso no mesmo horário ({}, {}–{}).",
+                        idx.teacher_label(&track.teacher_id),
+                        jr.session.name,
+                        jr.weekday.label_ptbr(),
+                        jr.start,
+                        jr.end
+                    ),
+                });
+            }
+        }
+    }
 }
 
 fn check_class_double_booking(idx: &Index, resolved: &[Resolved], out: &mut Vec<Violation>) {

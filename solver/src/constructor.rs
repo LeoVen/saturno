@@ -6,8 +6,8 @@
 //! are out of scope here.
 
 use crate::model::{
-    Assignment, GenerateResult, Index, InfeasibilityReport, MAX_CONSECUTIVE_PERIODS, PlacedPeriod,
-    Schedule, ScheduleInput, Teacher, WEEKDAYS, Weekday,
+    Assignment, GenerateResult, Index, InfeasibilityReport, JointSession, JointSessionPlacement,
+    MAX_CONSECUTIVE_PERIODS, PlacedPeriod, Schedule, ScheduleInput, Teacher, WEEKDAYS, Weekday,
 };
 use crate::verify::to_generate_result;
 use std::collections::{HashMap, HashSet};
@@ -20,29 +20,50 @@ use std::collections::{HashMap, HashSet};
 /// completeness bug (also D-35) was fixed.
 const SEARCH_BUDGET: u64 = 2_000_000;
 
-struct Task {
-    assignment_index: usize,
-    block_size: u32,
+enum Task {
+    Assignment {
+        assignment_index: usize,
+        block_size: u32,
+    },
+    /// FR-28: one weekly occurrence of a Joint Session — always exactly one
+    /// period (no Double/Triple-Period concept for Joint Sessions, unlike
+    /// `Assignment`'s `consecutivePeriods`).
+    JointSession { session_index: usize },
 }
 
 /// Decomposes each Assignment's `weeklyOccurrences` into placement blocks of
 /// `consecutivePeriods` size (a leftover remainder, if any, becomes its own
 /// smaller block) — see impls/DECISIONS.md for why floor-division is the
-/// chosen arithmetic (FR-8/FR-10 don't pin this down explicitly).
+/// chosen arithmetic (FR-8/FR-10 don't pin this down explicitly) — and each
+/// Joint Session's `weeklyOccurrences` into that many single-period tasks.
+/// Joint Session tasks are placed first (FR-25/29): they constrain several
+/// Classes and Teachers simultaneously, so committing to them before any
+/// single-Class Assignment claims a needed slot avoids backtracking deep
+/// into the (usually much larger) Assignment search only to discover a
+/// Joint Session no longer fits — the same "most constrained first"
+/// reasoning already applied to Assignment ordering below, just coarser
+/// (Joint Sessions are rare, so no finer sort among them is worth it).
 fn build_tasks(input: &ScheduleInput) -> Vec<Task> {
+    let mut joint_tasks = Vec::new();
+    for (session_index, session) in input.joint_sessions.iter().enumerate() {
+        for _ in 0..session.weekly_occurrences {
+            joint_tasks.push(Task::JointSession { session_index });
+        }
+    }
+
     let mut tasks = Vec::new();
     for (assignment_index, a) in input.assignments.iter().enumerate() {
         let block = a.consecutive_periods.max(1);
         let full_blocks = a.weekly_occurrences / block;
         let remainder = a.weekly_occurrences % block;
         for _ in 0..full_blocks {
-            tasks.push(Task {
+            tasks.push(Task::Assignment {
                 assignment_index,
                 block_size: block,
             });
         }
         if remainder > 0 {
-            tasks.push(Task {
+            tasks.push(Task::Assignment {
                 assignment_index,
                 block_size: remainder,
             });
@@ -92,9 +113,21 @@ fn build_tasks(input: &ScheduleInput) -> Vec<Task> {
     for a in &input.assignments {
         *class_total.entry(a.class_id.as_str()).or_insert(0) += a.weekly_occurrences;
     }
+    // `tasks` only ever holds `Task::Assignment` at this point (joint_tasks
+    // is prepended separately below, after sorting).
+    let assignment_index_of = |t: &Task| match t {
+        Task::Assignment {
+            assignment_index, ..
+        } => *assignment_index,
+        Task::JointSession { .. } => unreachable!("joint_tasks is sorted/merged separately"),
+    };
+    let block_size_of = |t: &Task| match t {
+        Task::Assignment { block_size, .. } => *block_size,
+        Task::JointSession { .. } => unreachable!("joint_tasks is sorted/merged separately"),
+    };
     tasks.sort_by(|t1, t2| {
-        let a1 = &input.assignments[t1.assignment_index];
-        let a2 = &input.assignments[t2.assignment_index];
+        let a1 = &input.assignments[assignment_index_of(t1)];
+        let a2 = &input.assignments[assignment_index_of(t2)];
         let f1 = flexibility_cache.get(a1.id.as_str()).copied().unwrap_or(0);
         let f2 = flexibility_cache.get(a2.id.as_str()).copied().unwrap_or(0);
         let c1 = class_total.get(a1.class_id.as_str()).copied().unwrap_or(0);
@@ -103,9 +136,11 @@ fn build_tasks(input: &ScheduleInput) -> Vec<Task> {
             .then_with(|| c2.cmp(&c1))
             .then_with(|| a1.class_id.cmp(&a2.class_id))
             .then_with(|| a1.teacher_ids.len().cmp(&a2.teacher_ids.len()))
-            .then_with(|| t2.block_size.cmp(&t1.block_size))
+            .then_with(|| block_size_of(t2).cmp(&block_size_of(t1)))
     });
-    tasks
+
+    joint_tasks.extend(tasks);
+    joint_tasks
 }
 
 /// How many of the 5 weekdays a Teacher has *at least one real period*
@@ -172,16 +207,17 @@ struct SearchState {
     /// commit (LIFO), letting undo just truncate tails instead of
     /// searching for what to remove.
     teacher_periods: HashMap<String, Vec<(Weekday, String, String)>>,
+    joint_placements: Vec<JointSessionPlacement>,
 }
 
 impl SearchState {
-    fn commit(&mut self, idx: &Index, assignment: &Assignment, task: &Task, cand: &Candidate) {
+    fn commit(&mut self, idx: &Index, assignment: &Assignment, block_size: u32, cand: &Candidate) {
         let slots = idx.slots_of_class(&assignment.class_id);
         let block = slots
             .iter()
             .enumerate()
             .skip(cand.start)
-            .take(task.block_size as usize);
+            .take(block_size as usize);
         for (i, &slot) in block {
             self.class_slot_occupied
                 .entry(assignment.class_id.clone())
@@ -207,8 +243,8 @@ impl SearchState {
         }
     }
 
-    fn undo(&mut self, assignment: &Assignment, task: &Task, cand: &Candidate) {
-        let size = task.block_size as usize;
+    fn undo(&mut self, assignment: &Assignment, block_size: u32, cand: &Candidate) {
+        let size = block_size as usize;
         if let Some(set) = self.class_slot_occupied.get_mut(&assignment.class_id) {
             for i in cand.start..cand.start + size {
                 set.remove(&(cand.weekday, i));
@@ -226,6 +262,61 @@ impl SearchState {
         }
         let new_len = self.schedule.len() - size;
         self.schedule.truncate(new_len);
+    }
+
+    /// FR-25/27/29: commits one Joint Session occurrence — every
+    /// participating Class's slot and every Track Teacher's period, all at
+    /// once, plus the `JointSessionPlacement` itself. No `class_day_subject`
+    /// entry (FR-30: a Joint Session never satisfies/interacts with any
+    /// (Class, Subject) requirement, so the 3-period-ceiling/same-day-
+    /// repetition checks — which only ever apply to Assignments — don't
+    /// need to see it).
+    fn commit_joint(
+        &mut self,
+        idx: &Index,
+        session: &JointSession,
+        weekday: Weekday,
+        slot_index: usize,
+    ) {
+        let slots = idx.slots_of_joint_session(session);
+        let Some(&slot) = slots.get(slot_index) else {
+            return;
+        };
+        for class_id in &session.class_ids {
+            self.class_slot_occupied
+                .entry(class_id.clone())
+                .or_default()
+                .insert((weekday, slot_index));
+        }
+        for track in &session.tracks {
+            self.teacher_periods
+                .entry(track.teacher_id.clone())
+                .or_default()
+                .push((weekday, slot.start.clone(), slot.end.clone()));
+        }
+        self.joint_placements.push(JointSessionPlacement {
+            joint_session_id: session.id.clone(),
+            weekday,
+            time_slot_id: slot.id.clone(),
+        });
+    }
+
+    /// Reverses `commit_joint` — relies on the same LIFO guarantee as
+    /// `undo`: depth-first backtracking always undoes the most recent
+    /// commit first, so each Track Teacher's `teacher_periods` tail entry
+    /// is always the one this call just added.
+    fn undo_joint(&mut self, session: &JointSession, weekday: Weekday, slot_index: usize) {
+        for class_id in &session.class_ids {
+            if let Some(set) = self.class_slot_occupied.get_mut(class_id) {
+                set.remove(&(weekday, slot_index));
+            }
+        }
+        for track in &session.tracks {
+            if let Some(v) = self.teacher_periods.get_mut(&track.teacher_id) {
+                v.pop();
+            }
+        }
+        self.joint_placements.pop();
     }
 }
 
@@ -358,13 +449,13 @@ fn teacher_ok(
 fn candidates_for_task(
     idx: &Index,
     state: &SearchState,
-    task: &Task,
+    block_size: u32,
     assignment: &Assignment,
 ) -> Vec<Candidate> {
     let mut candidates = Vec::new();
     let slots = idx.slots_of_class(&assignment.class_id);
     let n = slots.len();
-    if n == 0 || assignment.teacher_ids.is_empty() || task.block_size as usize > n {
+    if n == 0 || assignment.teacher_ids.is_empty() || block_size as usize > n {
         return candidates;
     }
     let by_day = state.class_day_subject.get(assignment.class_id.as_str());
@@ -372,8 +463,8 @@ fn candidates_for_task(
     let empty_day: Vec<(usize, String)> = Vec::new();
     for &weekday in WEEKDAYS.iter() {
         let day_entries = by_day.and_then(|m| m.get(&weekday)).unwrap_or(&empty_day);
-        for start in 0..=(n - task.block_size as usize) {
-            let end = start + task.block_size as usize;
+        for start in 0..=(n - block_size as usize) {
+            let end = start + block_size as usize;
             let slots_free = occupied
                 .map(|set| (start..end).all(|i| !set.contains(&(weekday, i))))
                 .unwrap_or(true);
@@ -383,7 +474,7 @@ fn candidates_for_task(
             let merged_len = merged_run_length(
                 day_entries,
                 start,
-                task.block_size as usize,
+                block_size as usize,
                 &assignment.subject_id,
             );
             if merged_len > MAX_CONSECUTIVE_PERIODS as usize {
@@ -393,7 +484,7 @@ fn candidates_for_task(
                 && would_leave_separate_run(
                     day_entries,
                     start,
-                    task.block_size as usize,
+                    block_size as usize,
                     &assignment.subject_id,
                 )
             {
@@ -416,6 +507,58 @@ fn candidates_for_task(
     candidates
 }
 
+struct JointCandidate {
+    weekday: Weekday,
+    slot_index: usize,
+}
+
+/// FR-25/27/29: a slot is a valid candidate for a Joint Session occurrence
+/// only if every participating Class is free there *and* every Track's
+/// Teacher is free there (`teacher_ok` already checks unavailability, any
+/// already-committed period — Assignment or another Joint Session, both
+/// live in the same `teacher_periods` map — and the Teacher's own daily/
+/// consecutive limits). No 3-period-ceiling/same-day-repetition check
+/// (FR-30: those are Assignment-only, scoped to a (Class, Subject) pair,
+/// which a Joint Session slot never is).
+fn candidates_for_joint_session(
+    idx: &Index,
+    state: &SearchState,
+    session: &JointSession,
+) -> Vec<JointCandidate> {
+    let mut candidates = Vec::new();
+    let slots = idx.slots_of_joint_session(session);
+    if slots.is_empty() || session.class_ids.is_empty() {
+        return candidates;
+    }
+    for &weekday in WEEKDAYS.iter() {
+        for (slot_index, slot) in slots.iter().enumerate() {
+            let all_classes_free = session.class_ids.iter().all(|class_id| {
+                state
+                    .class_slot_occupied
+                    .get(class_id)
+                    .map(|set| !set.contains(&(weekday, slot_index)))
+                    .unwrap_or(true)
+            });
+            if !all_classes_free {
+                continue;
+            }
+            let block_times = [(slot.start.clone(), slot.end.clone())];
+            let all_teachers_ok = session
+                .tracks
+                .iter()
+                .all(|track| teacher_ok(idx, state, &track.teacher_id, weekday, &block_times));
+            if !all_teachers_ok {
+                continue;
+            }
+            candidates.push(JointCandidate {
+                weekday,
+                slot_index,
+            });
+        }
+    }
+    candidates
+}
+
 // The shared `No` prefix is meaningful here (each variant names a distinct
 // "nothing found" reason for FR-16's report), not accidental repetition.
 #[allow(clippy::enum_variant_names)]
@@ -423,20 +566,23 @@ enum DeadEndReason {
     NoTeachers,
     NoClassSlots,
     NoCommonAvailability,
+    /// FR-25/29: no (weekday, slot) leaves every participating Class and
+    /// every Track Teacher simultaneously free.
+    NoCommonSlotForJointSession,
 }
 
 fn classify_reason(
     idx: &Index,
     state: &SearchState,
     assignment: &Assignment,
-    task: &Task,
+    block_size: u32,
 ) -> DeadEndReason {
     if assignment.teacher_ids.is_empty() {
         return DeadEndReason::NoTeachers;
     }
     let slots = idx.slots_of_class(&assignment.class_id);
     let n = slots.len();
-    if task.block_size as usize > n {
+    if block_size as usize > n {
         return DeadEndReason::NoClassSlots;
     }
     let by_day = state.class_day_subject.get(assignment.class_id.as_str());
@@ -445,8 +591,8 @@ fn classify_reason(
     let mut any_free_ignoring_teacher = false;
     for &weekday in WEEKDAYS.iter() {
         let day_entries = by_day.and_then(|m| m.get(&weekday)).unwrap_or(&empty_day);
-        for start in 0..=(n - task.block_size as usize) {
-            let end = start + task.block_size as usize;
+        for start in 0..=(n - block_size as usize) {
+            let end = start + block_size as usize;
             let free = occupied
                 .map(|set| (start..end).all(|i| !set.contains(&(weekday, i))))
                 .unwrap_or(true);
@@ -456,7 +602,7 @@ fn classify_reason(
             let merged = merged_run_length(
                 day_entries,
                 start,
-                task.block_size as usize,
+                block_size as usize,
                 &assignment.subject_id,
             );
             if merged > MAX_CONSECUTIVE_PERIODS as usize {
@@ -466,7 +612,7 @@ fn classify_reason(
                 && would_leave_separate_run(
                     day_entries,
                     start,
-                    task.block_size as usize,
+                    block_size as usize,
                     &assignment.subject_id,
                 )
             {
@@ -482,49 +628,105 @@ fn classify_reason(
     }
 }
 
+/// Which Task a dead end was reached at — `build_infeasibility_report`
+/// needs this instead of a bare `task_idx` since `tasks` mixes two kinds
+/// with entirely different report content (a single Assignment/Class vs. a
+/// Joint Session's several Classes/Teachers).
+enum DeadEndTask {
+    Assignment { assignment_index: usize },
+    JointSession { session_index: usize },
+}
+
 fn search(
     idx: &Index,
     input: &ScheduleInput,
     tasks: &[Task],
     task_idx: usize,
     state: &mut SearchState,
-    deepest: &mut Option<(usize, DeadEndReason)>,
+    deepest: &mut Option<(usize, DeadEndTask, DeadEndReason)>,
     budget: &mut u64,
 ) -> bool {
     if task_idx == tasks.len() {
         return true;
     }
-    let task = &tasks[task_idx];
-    let assignment = &input.assignments[task.assignment_index];
-    let candidates = candidates_for_task(idx, state, task, assignment);
-    if candidates.is_empty() {
-        let reason = classify_reason(idx, state, assignment, task);
-        if deepest.as_ref().map(|(i, _)| task_idx > *i).unwrap_or(true) {
-            *deepest = Some((task_idx, reason));
+    match &tasks[task_idx] {
+        Task::Assignment {
+            assignment_index,
+            block_size,
+        } => {
+            let assignment = &input.assignments[*assignment_index];
+            let candidates = candidates_for_task(idx, state, *block_size, assignment);
+            if candidates.is_empty() {
+                let reason = classify_reason(idx, state, assignment, *block_size);
+                if deepest
+                    .as_ref()
+                    .map(|(i, ..)| task_idx > *i)
+                    .unwrap_or(true)
+                {
+                    *deepest = Some((
+                        task_idx,
+                        DeadEndTask::Assignment {
+                            assignment_index: *assignment_index,
+                        },
+                        reason,
+                    ));
+                }
+                return false;
+            }
+            for cand in candidates {
+                if *budget == 0 {
+                    return false;
+                }
+                *budget -= 1;
+                state.commit(idx, assignment, *block_size, &cand);
+                if search(idx, input, tasks, task_idx + 1, state, deepest, budget) {
+                    return true;
+                }
+                state.undo(assignment, *block_size, &cand);
+            }
+            false
         }
-        return false;
+        Task::JointSession { session_index } => {
+            let session = &input.joint_sessions[*session_index];
+            let candidates = candidates_for_joint_session(idx, state, session);
+            if candidates.is_empty() {
+                if deepest
+                    .as_ref()
+                    .map(|(i, ..)| task_idx > *i)
+                    .unwrap_or(true)
+                {
+                    *deepest = Some((
+                        task_idx,
+                        DeadEndTask::JointSession {
+                            session_index: *session_index,
+                        },
+                        DeadEndReason::NoCommonSlotForJointSession,
+                    ));
+                }
+                return false;
+            }
+            for cand in candidates {
+                if *budget == 0 {
+                    return false;
+                }
+                *budget -= 1;
+                state.commit_joint(idx, session, cand.weekday, cand.slot_index);
+                if search(idx, input, tasks, task_idx + 1, state, deepest, budget) {
+                    return true;
+                }
+                state.undo_joint(session, cand.weekday, cand.slot_index);
+            }
+            false
+        }
     }
-    for cand in candidates {
-        if *budget == 0 {
-            return false;
-        }
-        *budget -= 1;
-        state.commit(idx, assignment, task, &cand);
-        if search(idx, input, tasks, task_idx + 1, state, deepest, budget) {
-            return true;
-        }
-        state.undo(assignment, task, &cand);
-    }
-    false
 }
 
 fn build_infeasibility_report(
     idx: &Index,
     input: &ScheduleInput,
-    tasks: &[Task],
-    deepest: &Option<(usize, DeadEndReason)>,
+    deepest: &Option<(usize, DeadEndTask, DeadEndReason)>,
 ) -> InfeasibilityReport {
-    let Some((task_idx, reason)) = deepest else {
+    let Some((_, dead_end_task, reason)) = deepest else {
         return InfeasibilityReport {
             message: "Não foi possível gerar um horário válido dentro do esforço de busca configurado; tente simplificar a configuração e gerar novamente.".to_string(),
             class_id: None,
@@ -532,8 +734,40 @@ fn build_infeasibility_report(
             teacher_ids: Vec::new(),
         };
     };
-    let task = &tasks[*task_idx];
-    let a = &input.assignments[task.assignment_index];
+
+    let DeadEndTask::Assignment { assignment_index } = dead_end_task else {
+        // FR-16/25/29: the deepest dead-end was a Joint Session occurrence
+        // — name the session and every participating Class/Track Teacher
+        // rather than a single (Class, Subject) pair, since none applies.
+        let DeadEndTask::JointSession { session_index } = dead_end_task else {
+            unreachable!()
+        };
+        let session = &input.joint_sessions[*session_index];
+        let class_labels: Vec<String> = session
+            .class_ids
+            .iter()
+            .map(|c| idx.class_label(c))
+            .collect();
+        let teacher_ids: Vec<String> = session
+            .tracks
+            .iter()
+            .map(|t| t.teacher_id.clone())
+            .collect();
+        let teacher_names: Vec<String> = teacher_ids.iter().map(|t| idx.teacher_label(t)).collect();
+        return InfeasibilityReport {
+            message: format!(
+                "Nenhum horário deixa a sessão conjunta \"{}\" com todas as turmas ({}) e professores ({}) livres ao mesmo tempo.",
+                session.name,
+                class_labels.join(", "),
+                teacher_names.join(", "),
+            ),
+            class_id: session.class_ids.first().cloned(),
+            subject_id: None,
+            teacher_ids,
+        };
+    };
+
+    let a = &input.assignments[*assignment_index];
     let class_label = idx.class_label(&a.class_id);
     let subject_label = idx.subject_label(&a.subject_id);
     let teacher_names: Vec<String> = a.teacher_ids.iter().map(|t| idx.teacher_label(t)).collect();
@@ -554,6 +788,9 @@ fn build_infeasibility_report(
             teacher_names.join(", "),
             subject_label
         ),
+        DeadEndReason::NoCommonSlotForJointSession => {
+            unreachable!("only ever produced for a JointSession dead end, handled above")
+        }
     };
     InfeasibilityReport {
         message,
@@ -571,7 +808,7 @@ pub fn generate_quick(input: &ScheduleInput) -> GenerateResult {
     let idx = Index::build(input);
     let tasks = build_tasks(input);
     let mut state = SearchState::default();
-    let mut deepest: Option<(usize, DeadEndReason)> = None;
+    let mut deepest: Option<(usize, DeadEndTask, DeadEndReason)> = None;
     let mut budget = SEARCH_BUDGET;
     if search(
         &idx,
@@ -586,11 +823,12 @@ pub fn generate_quick(input: &ScheduleInput) -> GenerateResult {
             input,
             Schedule {
                 placements: state.schedule,
+                joint_session_placements: state.joint_placements,
             },
         )
     } else {
         GenerateResult::Infeasible {
-            reason: build_infeasibility_report(&idx, input, &tasks, &deepest),
+            reason: build_infeasibility_report(&idx, input, &deepest),
         }
     }
 }

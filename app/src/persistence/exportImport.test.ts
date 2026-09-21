@@ -10,6 +10,7 @@ const EMPTY_ENTITIES: EntitiesSnapshot = {
   subjects: [],
   teachers: [],
   assignments: [],
+  jointSessions: [],
 }
 
 const EMPTY_SCHEDULE_VERSIONS: ScheduleVersionsSnapshot = {

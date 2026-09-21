@@ -131,6 +131,7 @@ mod tests {
                 assignment("a3", "c2", "math", &["t1"], 4, 1, false),
                 assignment("a4", "c2", "port", &["t2"], 4, 1, false),
             ],
+            joint_sessions: Vec::new(),
         };
 
         let result = constructor::generate_quick(&input);
@@ -160,6 +161,7 @@ mod tests {
                 assignment("a1", "cA", "math", &["shared"], 4, 1, false),
                 assignment("a2", "cB", "math", &["shared"], 4, 1, false),
             ],
+            joint_sessions: Vec::new(),
         };
 
         let result = constructor::generate_quick(&input);
@@ -186,6 +188,7 @@ mod tests {
             subjects: vec![subject("math")],
             teachers: vec![teacher("shared")],
             assignments: vec![],
+            joint_sessions: Vec::new(),
         };
         // segA-slot-0 is 07:00-07:50; segB-slot-0 is 07:00-07:50 too (same
         // start hour) — force an overlap directly rather than relying on
@@ -207,6 +210,7 @@ mod tests {
                     time_slot_id: "segB-slot-0".into(),
                 },
             ],
+            joint_session_placements: Vec::new(),
         };
         let violations = verify::verify(&input, &schedule);
         assert!(
@@ -238,6 +242,7 @@ mod tests {
             subjects: vec![subject("math")],
             teachers: vec![unavailable_teacher],
             assignments: vec![assignment("a1", "c1", "math", &["t1"], 2, 1, false)],
+            joint_sessions: Vec::new(),
         };
 
         let result = constructor::generate_quick(&input);
@@ -262,6 +267,7 @@ mod tests {
             subjects: vec![subject("chem")],
             teachers: vec![teacher("t1")],
             assignments: vec![assignment("a1", "c1", "chem", &["t1"], 2, 2, false)],
+            joint_sessions: Vec::new(),
         };
         let GenerateResult::Feasible { schedule } = constructor::generate_quick(&input) else {
             panic!("expected feasible");
@@ -282,6 +288,7 @@ mod tests {
             subjects: vec![subject("gym")],
             teachers: vec![teacher("t1")],
             assignments: vec![assignment("a1", "c1", "gym", &["t1"], 9, 1, true)],
+            joint_sessions: Vec::new(),
         };
         let GenerateResult::Feasible { schedule } = constructor::generate_quick(&input) else {
             panic!("expected feasible");
@@ -305,6 +312,7 @@ mod tests {
             subjects: vec![subject("math")],
             teachers: vec![teacher("t1")],
             assignments: vec![assignment],
+            joint_sessions: Vec::new(),
         };
         let GenerateResult::Feasible { schedule } = constructor::generate_quick(&input) else {
             panic!("expected feasible");
@@ -381,6 +389,7 @@ mod tests {
             subjects,
             teachers,
             assignments,
+            joint_sessions: Vec::new(),
         };
 
         let start = std::time::Instant::now();
@@ -432,6 +441,7 @@ mod tests {
                 assignment("a2", "c2", "quimica", &["beck"], 3, 2, true),
                 assignment("a3", "c3", "quimica", &["beck"], 3, 2, true),
             ],
+            joint_sessions: Vec::new(),
         };
 
         let result = constructor::generate_quick(&input);
@@ -478,6 +488,7 @@ mod tests {
                 assignment("b2", "c2", "portugues", &["flex"], 3, 2, true),
                 assignment("b3", "c3", "portugues", &["flex"], 3, 2, true),
             ],
+            joint_sessions: Vec::new(),
         };
 
         let result = constructor::generate_quick(&input);
@@ -573,6 +584,7 @@ mod tests {
             subjects,
             teachers,
             assignments,
+            joint_sessions: Vec::new(),
         };
 
         let start = std::time::Instant::now();
@@ -590,6 +602,219 @@ mod tests {
                 panic!("expected this to be feasible: {}", reason.message)
             }
         }
+    }
+
+    fn track(id: &str, subject_id: &str, teacher_id: &str) -> Track {
+        Track {
+            id: id.to_string(),
+            subject_id: subject_id.to_string(),
+            teacher_id: teacher_id.to_string(),
+        }
+    }
+
+    fn joint_session(
+        id: &str,
+        class_ids: &[&str],
+        tracks: Vec<Track>,
+        weekly_occurrences: u32,
+    ) -> JointSession {
+        JointSession {
+            id: id.to_string(),
+            name: format!("Sessão {id}"),
+            class_ids: class_ids.iter().map(|s| s.to_string()).collect(),
+            tracks,
+            weekly_occurrences,
+        }
+    }
+
+    #[test]
+    fn joint_session_places_every_participating_class_at_the_same_slot_and_blocks_it_for_others() {
+        // Two Classes, one Track — every weekday/period is otherwise free,
+        // so the Constructor should place the session, and both Classes'
+        // *own* Assignments must land somewhere else, never on top of it.
+        let input = ScheduleInput {
+            segments: vec![segment("seg1", 4, 7)],
+            grades: vec![grade("g1", "seg1")],
+            classes: vec![class("c1", "g1"), class("c2", "g1")],
+            subjects: vec![subject("math"), subject("itinerario")],
+            teachers: vec![teacher("t1"), teacher("t2"), teacher("track-teacher")],
+            assignments: vec![
+                assignment("a1", "c1", "math", &["t1"], 4, 1, false),
+                assignment("a2", "c2", "math", &["t2"], 4, 1, false),
+            ],
+            joint_sessions: vec![joint_session(
+                "js1",
+                &["c1", "c2"],
+                vec![track("tr1", "itinerario", "track-teacher")],
+                1,
+            )],
+        };
+
+        let result = constructor::generate_quick(&input);
+        let GenerateResult::Feasible { schedule } = result else {
+            let GenerateResult::Infeasible { reason } = result else {
+                unreachable!()
+            };
+            panic!(
+                "expected this slack school to be feasible: {}",
+                reason.message
+            );
+        };
+        assert_eq!(schedule.joint_session_placements.len(), 1);
+        let jp = &schedule.joint_session_placements[0];
+        assert_eq!(jp.joint_session_id, "js1");
+
+        // No Assignment placement for either Class landed on the session's
+        // own (weekday, timeSlotId).
+        for p in &schedule.placements {
+            if (p.class_id == "c1" || p.class_id == "c2") && p.weekday == jp.weekday {
+                assert_ne!(
+                    p.time_slot_id, jp.time_slot_id,
+                    "an Assignment was placed on top of the Joint Session's slot"
+                );
+            }
+        }
+        assert!(verify::verify(&input, &schedule).is_empty());
+    }
+
+    #[test]
+    fn joint_session_infeasibility_names_the_session_when_no_common_slot_exists() {
+        // t1 is only free on Monday (every other weekday blocked); t2 is
+        // only free on Tuesday — no weekday leaves both Track Teachers free
+        // at once, so no slot ever works for the session.
+        let mut t1 = teacher("t1");
+        t1.unavailability = [Weekday::Tue, Weekday::Wed, Weekday::Thu, Weekday::Fri]
+            .iter()
+            .map(|&weekday| UnavailabilityRange {
+                id: format!("u1-{weekday:?}"),
+                weekday,
+                start: "00:00".into(),
+                end: "23:59".into(),
+            })
+            .collect();
+        let mut t2 = teacher("t2");
+        t2.unavailability = [Weekday::Mon, Weekday::Wed, Weekday::Thu, Weekday::Fri]
+            .iter()
+            .map(|&weekday| UnavailabilityRange {
+                id: format!("u2-{weekday:?}"),
+                weekday,
+                start: "00:00".into(),
+                end: "23:59".into(),
+            })
+            .collect();
+        let input = ScheduleInput {
+            segments: vec![segment("seg1", 1, 7)],
+            grades: vec![grade("g1", "seg1")],
+            classes: vec![class("c1", "g1")],
+            subjects: vec![subject("itinerario")],
+            teachers: vec![t1, t2],
+            assignments: vec![],
+            joint_sessions: vec![joint_session(
+                "js1",
+                &["c1"],
+                vec![
+                    track("tr1", "itinerario", "t1"),
+                    track("tr2", "itinerario", "t2"),
+                ],
+                1,
+            )],
+        };
+
+        let result = constructor::generate_quick(&input);
+        match result {
+            GenerateResult::Infeasible { reason } => {
+                assert!(reason.message.contains("Sessão js1"));
+            }
+            GenerateResult::Feasible { .. } => panic!("expected this to be infeasible"),
+        }
+    }
+
+    #[test]
+    fn verify_flags_a_joint_session_class_conflicting_with_a_normal_placement() {
+        let input = ScheduleInput {
+            segments: vec![segment("seg1", 2, 7)],
+            grades: vec![grade("g1", "seg1")],
+            classes: vec![class("c1", "g1")],
+            subjects: vec![subject("math"), subject("itinerario")],
+            teachers: vec![teacher("t1"), teacher("track-teacher")],
+            assignments: vec![],
+            joint_sessions: vec![joint_session(
+                "js1",
+                &["c1"],
+                vec![track("tr1", "itinerario", "track-teacher")],
+                1,
+            )],
+        };
+        let schedule = Schedule {
+            placements: vec![PlacedPeriod {
+                class_id: "c1".into(),
+                subject_id: "math".into(),
+                teacher_id: "t1".into(),
+                weekday: Weekday::Mon,
+                time_slot_id: "seg1-slot-0".into(),
+            }],
+            joint_session_placements: vec![JointSessionPlacement {
+                joint_session_id: "js1".into(),
+                weekday: Weekday::Mon,
+                time_slot_id: "seg1-slot-0".into(),
+            }],
+        };
+
+        let violations = verify::verify(&input, &schedule);
+        assert!(violations.iter().any(
+            |v| matches!(v, Violation::ClassDoubleBooked { class_id, .. } if class_id == "c1")
+        ));
+    }
+
+    #[test]
+    fn verify_flags_a_joint_session_teacher_conflicting_with_another_joint_session() {
+        // Same Teacher, in a Track of two different Joint Sessions, both
+        // placed at the same (weekday, timeSlotId) — FR-29's "including any
+        // other Joint Session" clause.
+        let input = ScheduleInput {
+            segments: vec![segment("seg1", 2, 7)],
+            grades: vec![grade("g1", "seg1")],
+            classes: vec![class("c1", "g1"), class("c2", "g1")],
+            subjects: vec![subject("itinerario")],
+            teachers: vec![teacher("shared")],
+            assignments: vec![],
+            joint_sessions: vec![
+                joint_session(
+                    "js1",
+                    &["c1"],
+                    vec![track("tr1", "itinerario", "shared")],
+                    1,
+                ),
+                joint_session(
+                    "js2",
+                    &["c2"],
+                    vec![track("tr2", "itinerario", "shared")],
+                    1,
+                ),
+            ],
+        };
+        let schedule = Schedule {
+            placements: vec![],
+            joint_session_placements: vec![
+                JointSessionPlacement {
+                    joint_session_id: "js1".into(),
+                    weekday: Weekday::Mon,
+                    time_slot_id: "seg1-slot-0".into(),
+                },
+                JointSessionPlacement {
+                    joint_session_id: "js2".into(),
+                    weekday: Weekday::Mon,
+                    time_slot_id: "seg1-slot-0".into(),
+                },
+            ],
+        };
+
+        let violations = verify::verify(&input, &schedule);
+        assert!(
+            violations.iter().any(
+                |v| matches!(v, Violation::TeacherDoubleBooked { teacher_id, .. } if teacher_id == "shared")
+            )
+        );
     }
 
     #[test]
@@ -633,6 +858,7 @@ mod tests {
                 2,
                 false,
             )],
+            joint_sessions: Vec::new(),
         };
 
         let result = constructor::generate_quick(&input);
