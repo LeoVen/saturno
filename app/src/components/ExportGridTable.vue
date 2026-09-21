@@ -20,14 +20,14 @@ defineProps<{
     <table v-for="(block, bi) in grid.blocks" :key="bi" class="export-table">
       <thead>
         <tr class="day-header-row">
-          <th class="corner"></th>
-          <th v-for="day in block.days" :key="day.weekday" :colspan="grid.columns.length">
-            {{ day.label }}
-          </th>
+          <template v-for="day in block.days" :key="day.weekday">
+            <th class="corner"></th>
+            <th :colspan="grid.columns.length">{{ day.label }}</th>
+          </template>
         </tr>
         <tr class="col-header-row">
-          <th>Horário</th>
           <template v-for="day in block.days" :key="day.weekday">
+            <th class="time-header">Horário</th>
             <th v-for="col in grid.columns" :key="`${day.weekday}-${col.key}`">{{ col.label }}</th>
           </template>
         </tr>
@@ -38,8 +38,8 @@ defineProps<{
           :key="ri"
           :class="row.kind === 'break' ? 'break-row' : ''"
         >
-          <th class="time-label">{{ row.timeLabel }}</th>
           <template v-for="(dayCells, di) in row.cellsByDay" :key="di">
+            <th class="time-label">{{ row.timeLabel }}</th>
             <td v-for="(cell, ci) in dayCells" :key="ci">
               <template v-if="cell">
                 <strong class="primary-line">{{ cell.lines[0] }}</strong>
@@ -84,12 +84,12 @@ defineProps<{
   font-size: 0.9rem;
 }
 
-.col-header-row th:first-child {
+.col-header-row th.time-header {
   background: #93c5fd;
   font-weight: 700;
 }
 
-.col-header-row th:not(:first-child) {
+.col-header-row th:not(.time-header) {
   background: #dbeafe;
   font-weight: 400;
 }

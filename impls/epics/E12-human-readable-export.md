@@ -102,3 +102,17 @@ use the app — comparable in layout to the school's existing spreadsheets in
   rendered, `.xlsx` downloaded and re-opened successfully for both modes,
   no console errors. This is agent-driven verification, not the epic's own
   Human Verification steps.
+- **Layout follow-up, user-requested (2026-09-21)**: the "Horário" column
+  now repeats immediately before each day's own data columns — previously
+  it only appeared once at the very start of a two-days-per-row block, so
+  the second day's columns had no adjacent time label. Changed in both
+  output paths together (`xlsxExport.ts`'s `writeGrid`, restructured
+  around a `dayBase(d)` helper so every day gets its own `[Horário][data
+  columns]` group; `ExportGridTable.vue`'s header/data rows, mirroring the
+  same repetition) — kept identical per D-36. E15's re-import manifest
+  records column positions as they're actually written, so this needed no
+  change on the import side. Verified against the real
+  `export-2026-09-21.json` data (headless Chromium): both the on-screen
+  preview and the downloaded `.xlsx` show "Horário" and the matching time
+  label repeated before the second day's columns in every block, no
+  console errors.

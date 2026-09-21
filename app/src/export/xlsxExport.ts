@@ -73,26 +73,37 @@ function writeGrid(
   timeColumnWidth = 14,
   recordCell?: RecordCell,
 ): void {
-  sheet.getColumn(1).width = timeColumnWidth
+  // Each day gets its own "Horário" column immediately before its data
+  // columns (user request 2026-09-21) — not just once at the start of the
+  // row — so a `[Horário][day1 cols][Horário][day2 cols]` group repeats per
+  // day. `dayBase(d)` is the 1-indexed column of day `d`'s own Horário
+  // column within a block; its data columns follow directly after it.
+  const dayBase = (d: number): number => d * (1 + columns.length) + 1
+
   // Every day-block's columns must be sized, not just the first day's —
   // blocks pair up to 2 days side by side (Mon+Tue, Wed+Thu; Fri alone),
   // and each day repeats the same `columns.length` columns.
   const maxDaysPerBlock = Math.max(1, ...blocks.map((b) => b.days.length))
-  for (let i = 0; i < maxDaysPerBlock * columns.length; i++) {
-    sheet.getColumn(i + 2).width = DATA_COLUMN_WIDTH
+  for (let d = 0; d < maxDaysPerBlock; d++) {
+    sheet.getColumn(dayBase(d)).width = timeColumnWidth
+    for (let ci = 0; ci < columns.length; ci++) {
+      sheet.getColumn(dayBase(d) + 1 + ci).width = DATA_COLUMN_WIDTH
+    }
   }
 
   let row = 1
   for (const block of blocks) {
-    // Day-name banner row, merged across each day's block of columns.
-    let col = 2
-    for (const day of block.days) {
-      const first = sheet.getCell(row, col)
-      first.value = day.label
-      sheet.mergeCells(row, col, row, col + columns.length - 1)
-      col += columns.length
+    // Day-name banner row: fill/border spans every column in the block
+    // (including each day's Horário column), but the day-name text is only
+    // merged across that day's own data columns.
+    for (let d = 0; d < block.days.length; d++) {
+      const labelStart = dayBase(d) + 1
+      const first = sheet.getCell(row, labelStart)
+      first.value = block.days[d]!.label
+      sheet.mergeCells(row, labelStart, row, labelStart + columns.length - 1)
     }
-    for (let c = 1; c <= 1 + block.days.length * columns.length; c++) {
+    const bannerCols = block.days.length * (1 + columns.length)
+    for (let c = 1; c <= bannerCols; c++) {
       const cell = sheet.getCell(row, c)
       cell.fill = fill(DAY_BANNER_FILL)
       cell.font = { bold: true, size: 12 }
@@ -101,47 +112,49 @@ function writeGrid(
     }
     row++
 
-    // Column header row: "Horário" + one column-label group per day.
+    // Column header row: "Horário" + a column-label group, once per day.
     const headerRow = row
-    const horarioCell = sheet.getCell(headerRow, 1)
-    horarioCell.value = 'Horário'
-    horarioCell.fill = fill(HEADER_PRIMARY_FILL)
-    horarioCell.font = { bold: true }
-    horarioCell.alignment = { horizontal: 'center', vertical: 'middle' }
-    horarioCell.border = THIN_BORDER
-    col = 2
     for (let d = 0; d < block.days.length; d++) {
-      for (const c of columns) {
-        const cell = sheet.getCell(headerRow, col)
-        cell.value = c.label
+      const base = dayBase(d)
+      const horarioCell = sheet.getCell(headerRow, base)
+      horarioCell.value = 'Horário'
+      horarioCell.fill = fill(HEADER_PRIMARY_FILL)
+      horarioCell.font = { bold: true }
+      horarioCell.alignment = { horizontal: 'center', vertical: 'middle' }
+      horarioCell.border = THIN_BORDER
+      for (let ci = 0; ci < columns.length; ci++) {
+        const cell = sheet.getCell(headerRow, base + 1 + ci)
+        cell.value = columns[ci]!.label
         cell.fill = fill(HEADER_SECONDARY_FILL)
         cell.alignment = { horizontal: 'center', vertical: 'middle' }
         cell.border = THIN_BORDER
-        col++
       }
     }
     row++
 
-    // One row per Time Slot/Break in the Segment's row plan.
+    // One row per Time Slot/Break in the Segment's row plan, the time label
+    // repeated in each day's own Horário column.
     for (const gridRow of block.rows) {
-      const timeCell = sheet.getCell(row, 1)
-      timeCell.value = gridRow.timeLabel
-      timeCell.border = THIN_BORDER
-      timeCell.alignment = { horizontal: 'center', vertical: 'middle' }
-      if (gridRow.kind === 'break') {
-        timeCell.fill = fill(DAY_BANNER_FILL)
-        timeCell.font = { bold: true }
-      } else {
-        timeCell.fill = fill(HEADER_SECONDARY_FILL)
-        timeCell.font = { bold: true }
-      }
-
-      col = 2
       for (let d = 0; d < block.days.length; d++) {
         const weekday = block.days[d]!.weekday
+        const base = dayBase(d)
+
+        const timeCell = sheet.getCell(row, base)
+        timeCell.value = gridRow.timeLabel
+        timeCell.border = THIN_BORDER
+        timeCell.alignment = { horizontal: 'center', vertical: 'middle' }
+        if (gridRow.kind === 'break') {
+          timeCell.fill = fill(DAY_BANNER_FILL)
+          timeCell.font = { bold: true }
+        } else {
+          timeCell.fill = fill(HEADER_SECONDARY_FILL)
+          timeCell.font = { bold: true }
+        }
+
         const dayCells = gridRow.cellsByDay[d]!
         for (let ci = 0; ci < dayCells.length; ci++) {
           const cellContent = dayCells[ci]
+          const col = base + 1 + ci
           const cell = sheet.getCell(row, col)
           cell.border = THIN_BORDER
           cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
@@ -154,7 +167,6 @@ function writeGrid(
           if (gridRow.kind === 'period' && gridRow.timeSlotId && recordCell) {
             recordCell(row, col, columns[ci]!.key, weekday, gridRow.timeSlotId)
           }
-          col++
         }
       }
       sheet.getRow(row).height = gridRow.kind === 'break' ? 8 : 34
