@@ -85,3 +85,8 @@ does the thing it exists to do.
   (classes had only been added under one of four Grades), not a code bug —
   confirmed by reproducing an equivalent multi-grade setup locally with no
   issue.
+- **Retrofit** (2026-09-21): the Constructor's task-ordering heuristic now
+  prioritizes Assignments with the least-flexible Teacher pool, and the
+  search budget was raised — in response to a user report of a feasible
+  school (a 2-day-only Teacher) coming back infeasible. Not independently
+  reproduced despite several attempts — see [D-33](../DECISIONS.md).

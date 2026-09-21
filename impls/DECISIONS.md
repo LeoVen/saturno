@@ -505,4 +505,39 @@ Template for a new entry:
 - **Affected epics/tasks**: E05 (`entities.ts`'s `addAssignment`), already
   `done`; a retrofit, not a reopening of its checkpoint.
 
+## D-33 — Constructor task ordering: scarce-Teacher Assignments go first
+
+- **Date**: 2026-09-20
+- **Type**: Clarification (refines D-20's search heuristic)
+- **Spec refs**: FR-14, FR-16, TR-9, TR-10
+- **What changes**: the Constructor's task-ordering heuristic
+  (`solver/src/constructor.rs::build_tasks`) now sorts Assignments whose
+  Teacher pool has the fewest open weekdays (least "no unavailability
+  recorded" days, a coarse flexibility proxy) *first*, ahead of the
+  existing class-load/teacher-pool-size/block-size tiebreakers. Also
+  raises `SEARCH_BUDGET` from 500,000 to 2,000,000 commit-steps as extra
+  backtracking headroom (still comfortably under a second at TR-10 scale).
+- **Why**: user-reported — a Teacher available only 2 days/week teaching
+  one Subject to 3 Classes was reported infeasible ("Beck: nenhum horário
+  disponível...") despite the numbers clearly fitting. The previous
+  ordering had no notion of a Teacher's *availability breadth*, only pool
+  *size* — a single-Teacher Assignment with a fully-flexible Teacher sorted
+  identically to one with a heavily-restricted Teacher, so a
+  less-constrained Subject sharing the same Classes could grab a scarce
+  Teacher's only usable weekdays simply by being tried first (Monday is
+  always attempted before Tuesday), forcing backtracking that may not
+  finish within budget. This is a standard CSP "fail first"
+  most-constrained-variable technique, now applied to the dimension that
+  actually matters (day-flexibility, not just pool cardinality).
+  **Not independently reproduced**: several attempts (isolated, embedded
+  in a synthetic 16-class/40-teacher busy schedule) to reconstruct the
+  exact failure both succeeded even before this change — the fix is
+  applied on the strength of the failure-mode reasoning above and the
+  general engineering value of a better CSP heuristic, not a confirmed
+  root-cause match. If it still occurs, it needs the actual failing
+  configuration to pin down further.
+- **Affected epics/tasks**: E06 (`constructor.rs`), status `done` — a
+  correctness refinement to an already-shipped module, not a reopening of
+  the epic's checkpoint.
+
 *(entries above are the most recent)*

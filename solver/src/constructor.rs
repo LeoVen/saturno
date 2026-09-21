@@ -7,14 +7,20 @@
 
 use crate::model::{
     Assignment, GenerateResult, Index, InfeasibilityReport, MAX_CONSECUTIVE_PERIODS, PlacedPeriod,
-    Schedule, ScheduleInput, WEEKDAYS, Weekday,
+    Schedule, ScheduleInput, Teacher, WEEKDAYS, Weekday,
 };
 use crate::verify::to_generate_result;
 use std::collections::{HashMap, HashSet};
 
 /// Bounds total backtracking effort so a genuinely hard/degenerate input
 /// still returns within TR-10's "a few seconds" target instead of hanging.
-const SEARCH_BUDGET: u64 = 500_000;
+/// Raised from 500_000 (D-33), alongside the scarce-Teacher-first ordering
+/// heuristic above, in response to a real user report of a feasible school
+/// being reported infeasible — extra backtracking headroom is cheap at
+/// TR-10's scale (see `respects_tr_10_scale_within_a_practical_time_budget`,
+/// still well under a second) even though the exact root cause wasn't
+/// reproduced in isolation.
+const SEARCH_BUDGET: u64 = 2_000_000;
 
 struct Task {
     assignment_index: usize,
@@ -46,10 +52,25 @@ fn build_tasks(input: &ScheduleInput) -> Vec<Task> {
     }
 
     // Heuristic ordering only (feasibility-first; spreading/quality is
-    // E13's Scorer/Refiner, out of scope here): classes with the heaviest
-    // weekly load first, then within a class the hardest-to-place tasks
-    // first (fewest candidate Teachers, then biggest blocks) — a standard
-    // "fail first" CSP variable ordering to cut backtracking.
+    // E13's Scorer/Refiner, out of scope here) — a standard "fail first"
+    // CSP variable ordering to cut backtracking, most-constrained first:
+    //   1. Assignments whose Teacher pool has the *least* weekday
+    //      flexibility (e.g. a Teacher available only 2 days/week) go
+    //      first — otherwise a less-constrained Subject sharing the same
+    //      Class can grab a scarce Teacher's only usable weekdays simply
+    //      by being tried first, forcing deep backtracking (or exhausting
+    //      the search budget) to undo it later. Confirmed via a real user
+    //      report: a 2-day-only Teacher's Assignment failed to place amid
+    //      a busy schedule where this wasn't accounted for.
+    //   2. Then classes with the heaviest weekly load.
+    //   3. Then within a class, fewest candidate Teachers, biggest blocks.
+    let teacher_by_id: HashMap<&str, &Teacher> =
+        input.teachers.iter().map(|t| (t.id.as_str(), t)).collect();
+    let flexibility_cache: HashMap<&str, usize> = input
+        .assignments
+        .iter()
+        .map(|a| (a.id.as_str(), assignment_flexibility(a, &teacher_by_id)))
+        .collect();
     let mut class_total: HashMap<&str, u32> = HashMap::new();
     for a in &input.assignments {
         *class_total.entry(a.class_id.as_str()).or_insert(0) += a.weekly_occurrences;
@@ -57,14 +78,45 @@ fn build_tasks(input: &ScheduleInput) -> Vec<Task> {
     tasks.sort_by(|t1, t2| {
         let a1 = &input.assignments[t1.assignment_index];
         let a2 = &input.assignments[t2.assignment_index];
+        let f1 = flexibility_cache.get(a1.id.as_str()).copied().unwrap_or(0);
+        let f2 = flexibility_cache.get(a2.id.as_str()).copied().unwrap_or(0);
         let c1 = class_total.get(a1.class_id.as_str()).copied().unwrap_or(0);
         let c2 = class_total.get(a2.class_id.as_str()).copied().unwrap_or(0);
-        c2.cmp(&c1)
+        f1.cmp(&f2)
+            .then_with(|| c2.cmp(&c1))
             .then_with(|| a1.class_id.cmp(&a2.class_id))
             .then_with(|| a1.teacher_ids.len().cmp(&a2.teacher_ids.len()))
             .then_with(|| t2.block_size.cmp(&t1.block_size))
     });
     tasks
+}
+
+/// How many of the 5 weekdays a Teacher has *no* recorded unavailability on
+/// at all — a cheap, coarse proxy for "how flexible is this Teacher," used
+/// only to order the search (never to prune/reject a candidate).
+fn teacher_open_weekday_count(teacher: &Teacher) -> usize {
+    WEEKDAYS
+        .iter()
+        .filter(|&&weekday| !teacher.unavailability.iter().any(|u| u.weekday == weekday))
+        .count()
+}
+
+/// An Assignment's real flexibility is bounded by its *least* constrained
+/// Teacher option (D-12: the Constructor can pick any Teacher in the
+/// pool) — an Assignment with no configured Teacher at all is treated as
+/// maximally constrained (0), sorting it first so its dead end (if any) is
+/// found as early as possible.
+fn assignment_flexibility(
+    assignment: &Assignment,
+    teacher_by_id: &HashMap<&str, &Teacher>,
+) -> usize {
+    assignment
+        .teacher_ids
+        .iter()
+        .filter_map(|id| teacher_by_id.get(id.as_str()))
+        .map(|t| teacher_open_weekday_count(t))
+        .max()
+        .unwrap_or(0)
 }
 
 struct Candidate {

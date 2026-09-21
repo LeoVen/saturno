@@ -407,4 +407,193 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn user_reported_beck_two_day_teacher_should_fit_three_classes() {
+        // Reported bug: a Teacher available only Mon/Wed teaches the same
+        // Subject to 3 Classes, 3 occurrences each (9 total), in a Segment
+        // with 6 periods/day -> 12 available teacher-slots across the two
+        // days, comfortably more than the 9 needed. Should be feasible.
+        let mut beck = teacher("beck");
+        beck.unavailability = [Weekday::Tue, Weekday::Thu, Weekday::Fri]
+            .iter()
+            .map(|&weekday| UnavailabilityRange {
+                id: format!("u-{weekday:?}"),
+                weekday,
+                start: "00:00".into(),
+                end: "23:59".into(),
+            })
+            .collect();
+
+        let input = ScheduleInput {
+            segments: vec![segment("em", 6, 7)],
+            grades: vec![grade("g1", "em"), grade("g2", "em"), grade("g3", "em")],
+            classes: vec![class("c1", "g1"), class("c2", "g2"), class("c3", "g3")],
+            subjects: vec![subject("quimica")],
+            teachers: vec![beck],
+            // D-32 defaults: consecutivePeriods 2, allowSameDayRepetition true.
+            assignments: vec![
+                assignment("a1", "c1", "quimica", &["beck"], 3, 2, true),
+                assignment("a2", "c2", "quimica", &["beck"], 3, 2, true),
+                assignment("a3", "c3", "quimica", &["beck"], 3, 2, true),
+            ],
+        };
+
+        let result = constructor::generate_quick(&input);
+        match result {
+            GenerateResult::Feasible { schedule } => {
+                assert!(verify::verify(&input, &schedule).is_empty());
+            }
+            GenerateResult::Infeasible { reason } => {
+                panic!("expected this to be feasible: {}", reason.message)
+            }
+        }
+    }
+
+    #[test]
+    fn user_reported_beck_starved_by_a_flexible_subject_taking_his_only_days_first() {
+        // Same as above, but each Class also needs Portugues from a
+        // teacher who's available all week. Portugues is processed first
+        // (tied on every existing sort key, so falls back to insertion
+        // order) and greedily grabs Monday (the first weekday tried),
+        // starving Beck's only two usable days for the last Class.
+        let mut beck = teacher("beck");
+        beck.unavailability = [Weekday::Tue, Weekday::Thu, Weekday::Fri]
+            .iter()
+            .map(|&weekday| UnavailabilityRange {
+                id: format!("u-{weekday:?}"),
+                weekday,
+                start: "00:00".into(),
+                end: "23:59".into(),
+            })
+            .collect();
+        let flexible = teacher("flex");
+
+        let input = ScheduleInput {
+            segments: vec![segment("em", 6, 7)],
+            grades: vec![grade("g1", "em"), grade("g2", "em"), grade("g3", "em")],
+            classes: vec![class("c1", "g1"), class("c2", "g2"), class("c3", "g3")],
+            subjects: vec![subject("quimica"), subject("portugues")],
+            teachers: vec![beck, flexible],
+            assignments: vec![
+                assignment("a1", "c1", "quimica", &["beck"], 3, 2, true),
+                assignment("a2", "c2", "quimica", &["beck"], 3, 2, true),
+                assignment("a3", "c3", "quimica", &["beck"], 3, 2, true),
+                assignment("b1", "c1", "portugues", &["flex"], 3, 2, true),
+                assignment("b2", "c2", "portugues", &["flex"], 3, 2, true),
+                assignment("b3", "c3", "portugues", &["flex"], 3, 2, true),
+            ],
+        };
+
+        let result = constructor::generate_quick(&input);
+        match result {
+            GenerateResult::Feasible { schedule } => {
+                assert!(verify::verify(&input, &schedule).is_empty());
+            }
+            GenerateResult::Infeasible { reason } => {
+                panic!("expected this to be feasible: {}", reason.message)
+            }
+        }
+    }
+
+    #[test]
+    fn user_reported_beck_at_tr_10_scale_amid_a_busy_full_schedule() {
+        // Same TR-10-scale busy school as above (40 teachers, 16 classes,
+        // ~50% weekly utilization from 6 flexible Subjects each), plus a
+        // Beck-like Teacher restricted to Mon/Wed teaching one more Subject
+        // to 3 of the Classes in segEM - reproducing the reported bug
+        // inside a realistically busy schedule rather than in isolation.
+        let mut teachers = Vec::new();
+        for i in 0..40 {
+            teachers.push(teacher(&format!("t{i}")));
+        }
+        let mut beck = teacher("beck");
+        beck.unavailability = [Weekday::Tue, Weekday::Thu, Weekday::Fri]
+            .iter()
+            .map(|&weekday| UnavailabilityRange {
+                id: format!("u-{weekday:?}"),
+                weekday,
+                start: "00:00".into(),
+                end: "23:59".into(),
+            })
+            .collect();
+        teachers.push(beck);
+
+        let segments = vec![segment("segEF", 7, 7), segment("segEM", 8, 7)];
+        let mut grades = Vec::new();
+        let mut classes = Vec::new();
+        let mut subjects = Vec::new();
+        let mut assignments = Vec::new();
+        let subject_count = 6;
+        for s in 0..subject_count {
+            subjects.push(subject(&format!("subj{s}")));
+        }
+        subjects.push(subject("quimica"));
+
+        let mut assignment_seq = 0;
+        for c in 0..16 {
+            let segment_id = if c < 8 { "segEF" } else { "segEM" };
+            let grade_id = format!("grade{c}");
+            grades.push(grade(&grade_id, segment_id));
+            let class_id = format!("class{c}");
+            classes.push(class(&class_id, &grade_id));
+            let pool_offset = if c < 8 { 0 } else { 20 };
+            for s in 0..subject_count {
+                let subject_id = format!("subj{s}");
+                let base = (c % 8) * subject_count + s;
+                let candidate_teachers: Vec<String> = (0..3)
+                    .map(|k| format!("t{}", pool_offset + (base * 7 + k * 5) % 20))
+                    .collect();
+                let teacher_refs: Vec<&str> =
+                    candidate_teachers.iter().map(|s| s.as_str()).collect();
+                assignments.push(assignment(
+                    &format!("assign{assignment_seq}"),
+                    &class_id,
+                    &subject_id,
+                    &teacher_refs,
+                    3,
+                    1,
+                    false,
+                ));
+                assignment_seq += 1;
+            }
+            // 3 of the EM Classes also need Quimica from Beck (2 days only).
+            if (8..11).contains(&c) {
+                assignments.push(assignment(
+                    &format!("assign{assignment_seq}"),
+                    &class_id,
+                    "quimica",
+                    &["beck"],
+                    3,
+                    2,
+                    true,
+                ));
+                assignment_seq += 1;
+            }
+        }
+        let input = ScheduleInput {
+            segments,
+            grades,
+            classes,
+            subjects,
+            teachers,
+            assignments,
+        };
+
+        let start = std::time::Instant::now();
+        let result = constructor::generate_quick(&input);
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed.as_secs() < 10,
+            "TR-10 target is a few seconds; took {elapsed:?}"
+        );
+        match result {
+            GenerateResult::Feasible { schedule } => {
+                assert!(verify::verify(&input, &schedule).is_empty());
+            }
+            GenerateResult::Infeasible { reason } => {
+                panic!("expected this to be feasible: {}", reason.message)
+            }
+        }
+    }
 }
