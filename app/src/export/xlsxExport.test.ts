@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildClassGridWorkbook, buildTeacherGridWorkbook } from './xlsxExport'
 import { buildClassGridExports, buildTeacherGridExports } from './scheduleExport'
 import type { EntitiesSnapshot } from '../persistence/exportImport'
+import type { ScheduleNote } from '../entities/scheduleVersion'
 import type { Schedule } from '../wasm/types'
 
 function makeEntities(): EntitiesSnapshot {
@@ -99,6 +100,38 @@ describe('buildClassGridWorkbook', () => {
     expect(sheet.getColumn(4).width).toBe(14) // Tuesday, Horário
     expect(sheet.getColumn(5).width).toBe(18) // Tuesday, Class A
     expect(sheet.getColumn(6).width).toBe(18) // Tuesday, Class B
+  })
+})
+
+describe('Notes footnotes + reference markers (FR-19, IMPL.md §9)', () => {
+  it('appends a superscript marker to the noted cell and writes the "Observação N" list below the grid', () => {
+    const entities = makeEntities()
+    const notes: ScheduleNote[] = [
+      { id: 'n-whole', text: 'Nota geral', createdAt: '2026-01-01T00:00:00Z' },
+      {
+        id: 'n-slot',
+        text: 'Nota da aula',
+        createdAt: '2026-01-02T00:00:00Z',
+        slot: { classId: 'c-1', weekday: 'mon', timeSlotId: 'ts-1' },
+      },
+    ]
+    const grids = buildClassGridExports(entities, schedule, notes)
+    const workbook = buildClassGridWorkbook(grids)
+    const sheet = workbook.getWorksheet('Ensino Fundamental')!
+
+    const b3 = sheet.getCell('B3').value as { richText: { font: object; text: string }[] }
+    expect(b3.richText).toEqual([
+      { font: { size: 12, bold: true }, text: 'Ana' },
+      { font: { size: 9, color: { argb: 'FF666666' } }, text: '\nMatemática' },
+      { font: { size: 9, vertAlign: 'superscript' }, text: ' 2' },
+    ])
+
+    // 3 day-pair blocks (Mon+Tue, Wed+Thu, Fri) × 6 rows each (banner, header,
+    // 2 Time Slots + 1 Break, spacer) = 18 grid rows; footnotes start at 19.
+    expect(sheet.getCell('A19').value).toBe('Observação 1')
+    expect(sheet.getCell('A20').value).toBe('Nota geral')
+    expect(sheet.getCell('A21').value).toBe('Observação 2')
+    expect(sheet.getCell('A22').value).toBe('Nota da aula')
   })
 })
 

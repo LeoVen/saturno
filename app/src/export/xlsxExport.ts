@@ -14,6 +14,7 @@ import type {
   ClassGridExport,
   ExportBlock,
   ExportColumn,
+  ExportFootnote,
   TeacherGridExport,
 } from './scheduleExport'
 import type { Weekday } from '../entities/weekday'
@@ -40,21 +41,47 @@ function fill(argb: string): ExcelJS.Fill {
   return { type: 'pattern', pattern: 'solid', fgColor: { argb } }
 }
 
-/** `lines[0]` (e.g. the Teacher, per scheduleExport.ts) rendered bigger/bold; any further line smaller and muted — mirrors ExportGridTable.vue's `.primary-line`/`<small>` split so the preview and the .xlsx read the same way. */
-function richTextValue(lines: string[]): ExcelJS.CellValue | undefined {
+/** `lines[0]` (e.g. the Teacher, per scheduleExport.ts) rendered bigger/bold; any further line smaller and muted — mirrors ExportGridTable.vue's `.primary-line`/`<small>` split so the preview and the .xlsx read the same way. `noteNumber` (FR-19/IMPL.md §9), when present, appends a small superscript reference marker to the corresponding "Observação N" footnote — even on an otherwise-empty cell (a Note can be attached to a slot with no placement). */
+function richTextValue(lines: string[], noteNumber?: number): ExcelJS.CellValue | undefined {
   const nonEmpty = lines.filter(Boolean)
-  if (nonEmpty.length === 0) return undefined
-  if (nonEmpty.length === 1) return nonEmpty[0]
-  const [primary, ...rest] = nonEmpty
-  return {
-    richText: [
-      { font: { size: 12, bold: true }, text: primary! },
-      ...rest.map((text) => ({
-        font: { size: 9, color: { argb: 'FF666666' } },
-        text: `\n${text}`,
-      })),
-    ],
+  const markerRun: ExcelJS.RichText | undefined =
+    noteNumber === undefined
+      ? undefined
+      : { font: { size: 9, vertAlign: 'superscript' }, text: ` ${noteNumber}` }
+
+  if (nonEmpty.length === 0) {
+    return markerRun ? { richText: [markerRun] } : undefined
   }
+  if (nonEmpty.length === 1 && !markerRun) return nonEmpty[0]
+
+  const [primary, ...rest] = nonEmpty
+  const runs: ExcelJS.RichText[] = [
+    { font: { size: 12, bold: true }, text: primary! },
+    ...rest.map((text) => ({
+      font: { size: 9, color: { argb: 'FF666666' } },
+      text: `\n${text}`,
+    })),
+  ]
+  if (markerRun) runs.push(markerRun)
+  return { richText: runs }
+}
+
+/** FR-19/IMPL.md §9: the "Observação N" footnote list, written as label/text row pairs below the grid — matching the real sample sheets' layout (`sheets/HorárioEF_24.08.2026_T1.xlsx`: a bold "Observação N" cell directly above its plain-text row). Returns the next free row. */
+function writeFootnotes(
+  sheet: ExcelJS.Worksheet,
+  startRow: number,
+  footnotes: ExportFootnote[],
+): number {
+  let row = startRow
+  for (const fn of footnotes) {
+    const label = sheet.getCell(row, 1)
+    label.value = `Observação ${fn.number}`
+    label.font = { bold: true }
+    row++
+    sheet.getCell(row, 1).value = fn.text
+    row++
+  }
+  return row
 }
 
 /** E15: invoked for every data (period, not break) cell as it's written, so the caller can build the re-import manifest without re-deriving layout separately. */
@@ -66,13 +93,14 @@ type RecordCell = (
   timeSlotId: string,
 ) => void
 
+/** Returns the next free row after the grid, so a caller can append the footnote list directly beneath it. */
 function writeGrid(
   sheet: ExcelJS.Worksheet,
   columns: ExportColumn[],
   blocks: ExportBlock[],
   timeColumnWidth = 14,
   recordCell?: RecordCell,
-): void {
+): number {
   // Each day gets its own "Horário" column immediately before its data
   // columns (user request 2026-09-21) — not just once at the start of the
   // row — so a `[Horário][day1 cols][Horário][day2 cols]` group repeats per
@@ -161,7 +189,7 @@ function writeGrid(
           if (gridRow.kind === 'break') {
             cell.fill = fill(DAY_BANNER_FILL)
           } else if (cellContent) {
-            const value = richTextValue(cellContent.lines)
+            const value = richTextValue(cellContent.lines, cellContent.noteNumber)
             if (value !== undefined) cell.value = value
           }
           if (gridRow.kind === 'period' && gridRow.timeSlotId && recordCell) {
@@ -175,6 +203,7 @@ function writeGrid(
 
     row++ // blank spacer row between day-pair blocks
   }
+  return row
 }
 
 /**
@@ -192,9 +221,16 @@ export function buildClassGridWorkbook(grids: ClassGridExport[]): ExcelJS.Workbo
     const sheetName = grid.segmentName.slice(0, 31)
     const sheet = workbook.addWorksheet(sheetName)
     const cells: ManifestCell[] = []
-    writeGrid(sheet, grid.columns, grid.blocks, 14, (row, col, classId, weekday, timeSlotId) => {
-      cells.push({ row, col, classId, weekday, timeSlotId })
-    })
+    const nextRow = writeGrid(
+      sheet,
+      grid.columns,
+      grid.blocks,
+      14,
+      (row, col, classId, weekday, timeSlotId) => {
+        cells.push({ row, col, classId, weekday, timeSlotId })
+      },
+    )
+    writeFootnotes(sheet, nextRow, grid.footnotes)
     manifestSheets.push({ sheetName, segmentId: grid.segmentId, cells })
   }
   writeManifest(workbook, {
@@ -218,7 +254,8 @@ export function buildTeacherGridWorkbook(grids: TeacherGridExport[]): ExcelJS.Wo
     }
     usedNames.add(name)
     const sheet = workbook.addWorksheet(name)
-    writeGrid(sheet, grid.columns, grid.blocks)
+    const nextRow = writeGrid(sheet, grid.columns, grid.blocks)
+    writeFootnotes(sheet, nextRow, grid.footnotes)
   }
   return workbook
 }

@@ -42,14 +42,32 @@ defineProps<{
             <th class="time-label">{{ row.timeLabel }}</th>
             <td v-for="(cell, ci) in dayCells" :key="ci">
               <template v-if="cell">
-                <strong class="primary-line">{{ cell.lines[0] }}</strong>
+                <strong v-if="cell.lines[0]" class="primary-line"
+                  >{{ cell.lines[0]
+                  }}<sup v-if="cell.noteNumber" class="note-marker">{{
+                    cell.noteNumber
+                  }}</sup></strong
+                >
                 <small v-if="cell.lines[1]">{{ cell.lines[1] }}</small>
+                <sup v-if="cell.noteNumber && !cell.lines[0]" class="note-marker">{{
+                  cell.noteNumber
+                }}</sup>
               </template>
             </td>
           </template>
         </tr>
       </tbody>
     </table>
+
+    <!-- FR-19/IMPL.md §9: numbered "Observação N" footnote list beneath the
+         grid, matching the real sample sheets' convention — identical in the
+         print and .xlsx paths (xlsxExport.ts's writeFootnotes). -->
+    <dl v-if="grid.footnotes.length" class="footnotes">
+      <template v-for="fn in grid.footnotes" :key="fn.number">
+        <dt>Observação {{ fn.number }}</dt>
+        <dd>{{ fn.text }}</dd>
+      </template>
+    </dl>
   </section>
 </template>
 
@@ -116,5 +134,24 @@ defineProps<{
   display: block;
   font-size: 0.7rem;
   color: var(--color-text-muted);
+}
+
+.note-marker {
+  font-size: 0.65rem;
+  font-weight: 700;
+  margin-left: 1px;
+}
+
+.footnotes {
+  margin: 0 0 var(--space-4);
+  font-size: 0.8rem;
+}
+
+.footnotes dt {
+  font-weight: 700;
+}
+
+.footnotes dd {
+  margin: 0 0 var(--space-2);
 }
 </style>

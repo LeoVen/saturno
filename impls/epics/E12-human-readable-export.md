@@ -35,7 +35,7 @@ use the app — comparable in layout to the school's existing spreadsheets in
 | E12-T1 | Shared view-model: lay out a Schedule Version's per-Class/per-Teacher data into the two-days-per-row, breaks-as-dividers shape (IMPL.md §9) | done |
 | E12-T2 | `@media print` stylesheet + print trigger for the on-screen grid components (TR-13) | done |
 | E12-T3 | `.xlsx` generation via `exceljs`: fills, merges, column widths matching the real sample sheets (TR-13) | done |
-| E12-T4 | Notes footnote list + slot-level reference markers, identical in both output paths (FR-19, IMPL.md §9) | blocked |
+| E12-T4 | Notes footnote list + slot-level reference markers, identical in both output paths (FR-19, IMPL.md §9) | in-review |
 
 ## Decisions
 
@@ -46,10 +46,43 @@ use the app — comparable in layout to the school's existing spreadsheets in
   on-screen components show one Class/Teacher at a time with weekdays as
   columns, which can't be CSS-reshaped into the real sheets' whole-Segment,
   Classes-as-columns, two-days-per-row layout without a content change.
+- See [D-49](../DECISIONS.md) — E12-T4's footnote list/reference markers
+  are scoped and numbered per grid (Segment, or Teacher×Segment), not
+  globally across the whole export.
 
 ## Notes
 
-- **E12-T4 is blocked on E09, not implemented**: FR-19 Notes (slot-level
+- **E12-T4 implemented (2026-09-22)**, now that E09 has landed real Notes
+  storage. `scheduleExport.ts`'s `buildClassGridExports`/
+  `buildTeacherGridExports` take an optional `notes: ScheduleNote[]`
+  parameter (`ExportView.vue` passes `scheduleVersions.notesFor(activeVersion.id)`);
+  each grid gets its own numbered `footnotes: ExportFootnote[]` and each
+  `ExportCell` gets an optional `noteNumber` — see [D-49](../DECISIONS.md)
+  for the per-grid scoping/numbering call. `ExportGridTable.vue` renders a
+  `<sup class="note-marker">` on the noted cell and a `<dl class="footnotes">`
+  "Observação N" list beneath the grid; `xlsxExport.ts` mirrors both via a
+  superscript `richText` run (`vertAlign: 'superscript'`) and a
+  `writeFootnotes` helper appending label/text row pairs directly below
+  `writeGrid`'s output (which now returns its ending row so the footnotes
+  know where to start) — E15's re-import manifest is unaffected, since it
+  records exact cell row/col, not sheet length. Unit tests added to both
+  `scheduleExport.test.ts` and `xlsxExport.test.ts` covering: numbering
+  order (whole-schedule Notes + relevant slot Notes together), a slot Note
+  on a Class outside a given Segment's grid being excluded and not
+  numbered, a slot Note on an empty (no-placement) slot still rendering
+  with a marker, and a Teacher grid only picking up a Note that matches
+  that Teacher's own placement.
+- Verified end-to-end (agent-driven, not the epic's own Human Verification
+  steps below — those still need a person) against a small synthetic
+  fixture in a headless-Chromium session: imported via "Dados", a whole-
+  schedule Note plus three slot Notes (one on an occupied cell, one on an
+  empty cell, one on a different Teacher's period) all landed with the
+  expected footnote numbers/scoping in both Per-Turma and Por Professor
+  modes, in the on-screen preview, `@media print` emulation, and the
+  downloaded `.xlsx` (inspected directly via `exceljs` — superscript runs
+  and "Observação N" rows exactly matched what the preview showed). No
+  console errors.
+- **E12-T4 was blocked on E09, not implemented, until now**: FR-19 Notes (slot-level
   and whole-schedule) don't exist anywhere yet — no entity, no field on
   `ScheduleVersion`, no UI to create one (E09 "Manual Editing, Conflicts &
   Notes" is still `new` on the Board). E12's own Human Verification step 1

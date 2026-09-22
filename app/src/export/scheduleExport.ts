@@ -11,12 +11,21 @@
 import type { EntitiesSnapshot } from '../persistence/exportImport'
 import type { PlacedPeriod, Schedule } from '../wasm/types'
 import type { Segment } from '../entities/segment'
+import type { ScheduleNote } from '../entities/scheduleVersion'
 import type { Weekday } from '../entities/weekday'
 import { WEEKDAY_EXPORT_PAIRS, WEEKDAY_LABELS_FULL } from '../entities/weekday'
 
-/** One cell's display-ready content, `lines[0]` rendered with more emphasis (bigger/bolder) than the rest — for the per-Class grid, Teacher then Subject (FR-20's data, Teacher given the visual priority per user request 2026-09-21); for the per-Teacher grid, Class then Subject (FR-21). `null` means the slot is unoccupied. */
+/** One cell's display-ready content, `lines[0]` rendered with more emphasis (bigger/bolder) than the rest — for the per-Class grid, Teacher then Subject (FR-20's data, Teacher given the visual priority per user request 2026-09-21); for the per-Teacher grid, Class then Subject (FR-21). `null` means the slot is unoccupied and carries no Note either — a slot with no placement but a Note still renders (empty `lines`, `noteNumber` set) so the reference marker has somewhere to sit (E09: a Note can be attached to an empty slot). */
 export interface ExportCell {
   lines: string[]
+  /** FR-19/IMPL.md §9: this cell's slot-level Note, as the footnote number it links to — `undefined` when the slot has no Note. */
+  noteNumber?: number
+}
+
+/** FR-19/IMPL.md §9: one entry in the numbered "Observação N" list rendered beneath a grid, matching the real sample sheets' convention. Numbered per grid (not globally) — whole-schedule Notes plus every slot-level Note whose Class/Teacher actually appears on that grid. */
+export interface ExportFootnote {
+  number: number
+  text: string
 }
 
 export interface ExportRow {
@@ -42,6 +51,7 @@ export interface ClassGridExport {
   segmentName: string
   columns: ExportColumn[]
   blocks: ExportBlock[]
+  footnotes: ExportFootnote[]
 }
 
 export interface TeacherGridExport {
@@ -52,6 +62,7 @@ export interface TeacherGridExport {
   /** Always the single Teacher's own column — kept as an array (rather than a bare label) so `TeacherGridExport` shares its rendering shape with `ClassGridExport`. */
   columns: ExportColumn[]
   blocks: ExportBlock[]
+  footnotes: ExportFootnote[]
 }
 
 interface RowPlanEntry {
@@ -92,6 +103,31 @@ function teacherLabelFor(entities: EntitiesSnapshot, teacherId: string): string 
   return `${teacher.name} (${sameName.findIndex((t) => t.id === teacherId) + 1})`
 }
 
+/**
+ * FR-19/IMPL.md §9: numbers the Notes relevant to one grid — every
+ * whole-schedule Note plus every slot-level Note whose slot passes
+ * `slotInScope` (i.e. actually appears on that grid) — in their given
+ * order (creation order, per the store's `notesFor`). Returns the footnote
+ * list plus a lookup from slot key to footnote number, for `cellFor` to
+ * attach to the matching `ExportCell`.
+ */
+function buildFootnotes(
+  notes: ScheduleNote[],
+  slotInScope: (slot: NonNullable<ScheduleNote['slot']>) => boolean,
+): { footnotes: ExportFootnote[]; numberBySlot: Map<string, number> } {
+  const relevant = notes.filter((n) => !n.slot || slotInScope(n.slot))
+  const footnotes: ExportFootnote[] = []
+  const numberBySlot = new Map<string, number>()
+  relevant.forEach((note, i) => {
+    const number = i + 1
+    footnotes.push({ number, text: note.text })
+    if (note.slot) {
+      numberBySlot.set(`${note.slot.classId}:${note.slot.weekday}:${note.slot.timeSlotId}`, number)
+    }
+  })
+  return { footnotes, numberBySlot }
+}
+
 function buildBlocks(
   rowPlan: RowPlanEntry[],
   columns: ExportColumn[],
@@ -122,6 +158,7 @@ function buildBlocks(
 export function buildClassGridExports(
   entities: EntitiesSnapshot,
   schedule: Schedule,
+  notes: ScheduleNote[] = [],
 ): ClassGridExport[] {
   const exports: ClassGridExport[] = []
 
@@ -142,11 +179,22 @@ export function buildClassGridExports(
       placementIndex.set(`${p.classId}:${p.weekday}:${p.timeSlotId}`, p)
     }
 
+    const columnKeys = new Set(columns.map((c) => c.key))
+    const { footnotes, numberBySlot } = buildFootnotes(notes, (slot) =>
+      columnKeys.has(slot.classId),
+    )
+
     const cellFor = (classId: string, weekday: Weekday, timeSlotId: string): ExportCell | null => {
       const placement = placementIndex.get(`${classId}:${weekday}:${timeSlotId}`)
-      if (!placement) return null
-      const subject = entities.subjects.find((s) => s.id === placement.subjectId)?.name ?? '?'
-      return { lines: [teacherLabelFor(entities, placement.teacherId), subject] }
+      const noteNumber = numberBySlot.get(`${classId}:${weekday}:${timeSlotId}`)
+      if (!placement && noteNumber === undefined) return null
+      const lines = placement
+        ? [
+            teacherLabelFor(entities, placement.teacherId),
+            entities.subjects.find((s) => s.id === placement.subjectId)?.name ?? '?',
+          ]
+        : []
+      return noteNumber === undefined ? { lines } : { lines, noteNumber }
     }
 
     exports.push({
@@ -154,6 +202,7 @@ export function buildClassGridExports(
       segmentName: segment.name,
       columns,
       blocks: buildBlocks(buildRowPlan(segment), columns, cellFor),
+      footnotes,
     })
   }
 
@@ -169,6 +218,7 @@ export function buildClassGridExports(
 export function buildTeacherGridExports(
   entities: EntitiesSnapshot,
   schedule: Schedule,
+  notes: ScheduleNote[] = [],
 ): TeacherGridExport[] {
   const exports: TeacherGridExport[] = []
 
@@ -194,12 +244,25 @@ export function buildTeacherGridExports(
         placementIndex.set(`${p.weekday}:${p.timeSlotId}`, p)
       }
 
+      // A slot Note is relevant to this Teacher-in-Segment grid only if it's
+      // attached to a slot this Teacher is actually placed in here (the
+      // Note's `classId` must match that exact placement's Class) — not
+      // merely "the Class exists in this Segment", since a slot Note on a
+      // different Teacher's period in the same Segment isn't this grid's.
+      const { footnotes, numberBySlot } = buildFootnotes(notes, (slot) => {
+        const placement = placementIndex.get(`${slot.weekday}:${slot.timeSlotId}`)
+        return placement !== undefined && placement.classId === slot.classId
+      })
+
       const cellFor = (
         _columnKey: string,
         weekday: Weekday,
         timeSlotId: string,
       ): ExportCell | null => {
         const placement = placementIndex.get(`${weekday}:${timeSlotId}`)
+        const noteNumber = placement
+          ? numberBySlot.get(`${placement.classId}:${weekday}:${timeSlotId}`)
+          : undefined
         if (!placement) return null
         const schoolClass = entities.classes.find((c) => c.id === placement.classId)
         const grade = schoolClass
@@ -207,7 +270,9 @@ export function buildTeacherGridExports(
           : undefined
         const classLabel = [grade?.name, schoolClass?.name].filter(Boolean).join(' ') || '?'
         const subject = entities.subjects.find((s) => s.id === placement.subjectId)?.name ?? '?'
-        return { lines: [classLabel, subject] }
+        return noteNumber === undefined
+          ? { lines: [classLabel, subject] }
+          : { lines: [classLabel, subject], noteNumber }
       }
 
       exports.push({
@@ -217,6 +282,7 @@ export function buildTeacherGridExports(
         segmentName: segment.name,
         columns: [column],
         blocks: buildBlocks(buildRowPlan(segment), [column], cellFor),
+        footnotes,
       })
     }
   }

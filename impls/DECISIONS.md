@@ -1109,4 +1109,35 @@ Template for a new entry:
 - **Affected epics/tasks**: E05 (`AssignmentsConfig.vue`), `done` — a
   retrofit, not a reopening of its checkpoint.
 
+## D-49 — Notes footnotes/markers in the Human-Readable Export: scoped and numbered per grid, not globally
+
+- **Date**: 2026-09-22
+- **Type**: Clarification
+- **Spec refs**: FR-19, IMPL.md §9
+- **What changes**: IMPL.md §9 says notes render as "a numbered footnote
+  list beneath the grid" with a "reference marker" on a slot Note's cell,
+  but doesn't say how numbering/scope work across an export that's
+  actually several grids (one per Segment for Per-Turma, one per
+  Teacher×Segment for Por Professor) sharing one Schedule Version's flat
+  `notes` array. Implemented as: each `ClassGridExport`/`TeacherGridExport`
+  gets its own `footnotes` list, numbered 1..N independently per grid —
+  every whole-schedule Note (no `slot`) appears on every grid, plus every
+  slot Note whose slot is actually relevant to that specific grid (its
+  Class is a column of this Segment's grid; or, for a Teacher's grid,
+  the Note's slot matches that exact Teacher's own placement — a Note on
+  a different Teacher's period in the same Segment, or on a Class this
+  Teacher doesn't teach, doesn't surface there). A slot Note on an empty
+  slot (no placement — E09/`ScheduleGrid.vue` allows this) still renders:
+  the cell shows just the reference marker, `lines: []`, rather than being
+  dropped as if it were a `null` cell — but such a Note can never appear on
+  a Teacher grid, since there's no Teacher to attach it to at an empty
+  slot.
+- **Why**: matches the real sample sheet's per-page "Observação N"
+  convention (`sheets/HorárioEF_24.08.2026_T1.xlsx`: label row + text row,
+  inspected directly) better than one global numbering that would jump
+  unpredictably across unrelated Segment/Teacher pages; a global list would
+  also force every page to either show irrelevant footnotes or renumber
+  around gaps.
+- **Affected epics/tasks**: E12-T4.
+
 *(entries above are the most recent)*

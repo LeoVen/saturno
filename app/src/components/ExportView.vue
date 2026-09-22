@@ -32,14 +32,26 @@ const entitiesSnapshot = computed(() => ({
   assignments: entities.assignments,
 }))
 
+// FR-19/IMPL.md §9: the active version's Notes flow into both grid builders
+// so the footnote list + reference markers appear identically in the
+// on-screen preview, the print path, and the .xlsx path (all three read off
+// this same view-model, D-36).
+const activeNotes = computed(() =>
+  scheduleVersions.activeVersion
+    ? scheduleVersions.notesFor(scheduleVersions.activeVersion.id)
+    : [],
+)
+
 const classGrids = computed(() => {
   const schedule = scheduleVersions.activeVersion?.schedule
-  return schedule ? buildClassGridExports(entitiesSnapshot.value, schedule) : []
+  return schedule ? buildClassGridExports(entitiesSnapshot.value, schedule, activeNotes.value) : []
 })
 
 const teacherGrids = computed(() => {
   const schedule = scheduleVersions.activeVersion?.schedule
-  return schedule ? buildTeacherGridExports(entitiesSnapshot.value, schedule) : []
+  return schedule
+    ? buildTeacherGridExports(entitiesSnapshot.value, schedule, activeNotes.value)
+    : []
 })
 
 function triggerPrint(): void {
