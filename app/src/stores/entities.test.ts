@@ -269,6 +269,20 @@ describe('entities store — Subjects', () => {
     store.moveSubject(b, 'down')
     expect(store.subjects.map((s) => s.id)).toEqual([a, c, b])
   })
+
+  it('sortSubjectsByName is a one-off bulk sort, not a standing order', () => {
+    const store = useEntitiesStore()
+    const carla = store.addSubject('Ciências')
+    const ana = store.addSubject('Artes')
+    const bruno = store.addSubject('Biologia')
+
+    store.sortSubjectsByName()
+    expect(store.subjects.map((s) => s.id)).toEqual([ana, bruno, carla])
+
+    // Still freely reorderable afterward — sorting isn't an invariant.
+    store.moveSubject(carla, 'up')
+    expect(store.subjects.map((s) => s.id)).toEqual([ana, carla, bruno])
+  })
 })
 
 describe('entities store — Teachers', () => {

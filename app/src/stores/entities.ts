@@ -359,6 +359,16 @@ export const useEntitiesStore = defineStore('entities', {
       this.subjects = moveItem(this.subjects, id, direction)
     },
 
+    /**
+     * One-off bulk reorder to alphabetical-by-name (mirrors
+     * `sortTeachersByName`, D-26) — a fast way to get a sensible starting
+     * order, not a standing invariant: `moveSubject` still freely
+     * rearranges the result afterward.
+     */
+    sortSubjectsByName(): void {
+      this.subjects = [...this.subjects].sort((a, b) => a.name.localeCompare(b.name))
+    },
+
     addTeacher(name: string): string {
       // FR-2: names are intentionally not deduplicated/validated for
       // uniqueness — two Teachers may share a name and are distinct

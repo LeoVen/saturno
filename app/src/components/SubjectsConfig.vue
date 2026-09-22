@@ -22,6 +22,15 @@ function renameSubject(id: string, event: Event): void {
   <h2>Disciplinas</h2>
 
   <div class="card">
+    <button
+      v-if="store.subjects.length > 1"
+      type="button"
+      class="btn btn-sm"
+      style="margin-bottom: var(--space-2)"
+      @click="store.sortSubjectsByName()"
+    >
+      Ordenar por nome (A-Z)
+    </button>
     <ul class="pill-list">
       <li v-for="(subject, index) in store.subjects" :key="subject.id">
         <button

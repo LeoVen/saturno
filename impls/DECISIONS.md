@@ -987,4 +987,27 @@ Template for a new entry:
   semantics fixes to already-shipped modules, not a reopening of any of
   their checkpoints.
 
+## D-44 — Subjects gain the same "Ordenar por nome (A-Z)" one-off sort as Teachers
+
+- **Date**: 2026-09-22
+- **Type**: Implementation-only (retrofit, mirrors an existing pattern).
+- **Spec refs**: FR-7. Directly extends D-26.
+- **What changes**: `entities.ts` gains `sortSubjectsByName()`, identical
+  in shape to D-26's existing `sortTeachersByName()` — a one-off
+  alphabetical bulk-reorder of the `subjects` array (`localeCompare`,
+  stable sort), not a standing invariant; `moveSubject`'s existing ▲/▼
+  buttons still freely rearrange the result afterward. `SubjectsConfig.vue`
+  gets the same "Ordenar por nome (A-Z)" button `TeachersConfig.vue`
+  already had, same placement/gating (`v-if="length > 1"`).
+- **Why**: user-requested — Subjects had no equivalent to the sort button
+  Teachers already got in D-26. No separate "make dropdowns reflect it"
+  work was needed: D-26 already established that every list/dropdown
+  renders directly off the store's `teachers`/`subjects` array order (no
+  separate display-order layer), so sorting the array is automatically
+  everywhere the moment it happens — confirmed against the real exported
+  school data (Atribuições' Subject dropdown picked up the new order
+  immediately after clicking the button, no other code touched).
+- **Affected epics/tasks**: E03 (`SubjectsConfig.vue`), `done` — a
+  retrofit, not a reopening of its checkpoint.
+
 *(entries above are the most recent)*
