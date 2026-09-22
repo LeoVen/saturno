@@ -114,13 +114,22 @@ function copyResultMessage(result: { copied: number; skipped: number }): string 
 const filterClassId = ref('')
 const filterSubjectId = ref('')
 
-const filteredAssignments = computed(() =>
-  store.assignments.filter(
-    (a) =>
-      (!filterClassId.value || a.classId === filterClassId.value) &&
-      (!filterSubjectId.value || a.subjectId === filterSubjectId.value),
-  ),
-)
+// Sorted by Disciplina (user-requested 2026-09-22) — by the Subject's own
+// position in `store.subjects`, not a fresh alphabetical sort, so it tracks
+// whatever order the user has already set there (manual reorder or
+// "Ordenar por nome (A-Z)", D-26/D-44) instead of a second, independent
+// ordering. `.sort` is stable, so rows sharing a Subject keep their
+// existing relative order.
+const filteredAssignments = computed(() => {
+  const subjectIndex = new Map(store.subjects.map((s, i) => [s.id, i]))
+  return store.assignments
+    .filter(
+      (a) =>
+        (!filterClassId.value || a.classId === filterClassId.value) &&
+        (!filterSubjectId.value || a.subjectId === filterSubjectId.value),
+    )
+    .sort((a, b) => (subjectIndex.get(a.subjectId) ?? 0) - (subjectIndex.get(b.subjectId) ?? 0))
+})
 
 // Weekly-load summary: lets the user sanity-check total input at a glance,
 // ordered the same way every other Class listing in the app is.

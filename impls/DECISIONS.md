@@ -1089,4 +1089,24 @@ Template for a new entry:
 - **Affected epics/tasks**: E02 (`SegmentsConfig.vue`), `done` — a
   retrofit, not a reopening of its checkpoint.
 
+## D-48 — "Atribuições cadastradas" table sorted by Disciplina, tracking the Subjects list's own order
+
+- **Date**: 2026-09-22
+- **Type**: Implementation-only.
+- **Spec refs**: FR-9. Builds on D-26/D-44's Subject ordering.
+- **What changes**: `AssignmentsConfig.vue`'s `filteredAssignments` now
+  sorts by each row's Subject's position in `store.subjects` (a stable
+  sort, so rows sharing a Subject keep their existing relative order) —
+  previously unsorted (whatever order Assignments happened to be created
+  in). Not a fresh independent alphabetical sort: it tracks whatever order
+  the Subjects list is already in, so re-sorting or manually reordering
+  Subjects (D-26/D-44) re-groups this table too, without a second,
+  possibly-conflicting ordering concept.
+- **Why**: user-requested. Confirmed against the real exported school data
+  that the table was already grouped by Disciplina following the existing
+  custom Subject order, and re-sorting Subjects A-Z immediately re
+  -grouped the table to match (Artes, Biologia, Ciências, Ed Física, ...).
+- **Affected epics/tasks**: E05 (`AssignmentsConfig.vue`), `done` — a
+  retrofit, not a reopening of its checkpoint.
+
 *(entries above are the most recent)*
