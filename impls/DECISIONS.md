@@ -1042,4 +1042,33 @@ Template for a new entry:
 - **Affected epics/tasks**: E09 (`ScheduleGrid.vue`), `done` — a retrofit,
   not a reopening of its checkpoint.
 
+## D-46 — "Bloquear/Liberar dia" spans every Segment, not just the clicked one
+
+- **Date**: 2026-09-22
+- **Type**: Correctness fix.
+- **Spec refs**: FR-3 (Teacher availability). Directly affects D-29's
+  per-Segment availability-grid grouping.
+- **What changes**: `TeachersConfig.vue`'s "Bloquear dia"/"Liberar dia"
+  button (one per weekday, per Segment grid, D-29) now toggles that
+  weekday across *every* Segment the Teacher has an availability grid for,
+  not only whichever Segment's grid the button was clicked in.
+  `isDayFullyUnavailable`/`toggleDay` were re-scoped from taking one
+  group's `rows` to iterating `availabilityGroups.value` (every group);
+  the button's own "already blocked?" state is computed the same
+  all-groups way, so a Teacher who teaches in two Segments sees both
+  grids' buttons flip together and stay in sync.
+- **Why**: user-requested — a Teacher's day off is a real fact about the
+  Teacher, not about one Segment; leaving the other Segment's periods
+  still marked available after "blocking the day" left a real gap a user
+  could easily miss (Teacher shows as free for the other Segment on a day
+  they said they weren't). Confirmed against the real exported school data
+  (Fernando, who teaches Geografia 2 in both Ensino Médio and Ensino
+  Fundamental): clicking "Bloquear dia" for Monday in the Ensino Médio
+  grid also blocked Monday in the Ensino Fundamental grid (button flipped
+  to "Liberar dia" in both), Tuesday untouched in either, and toggling
+  back freed both.
+- **Affected epics/tasks**: E04 (`TeachersConfig.vue`), `done` — a
+  correctness fix to an already-shipped screen, not a reopening of its
+  checkpoint.
+
 *(entries above are the most recent)*

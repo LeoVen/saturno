@@ -101,18 +101,24 @@ function toggleCell(weekday: Weekday, rowKey: string): void {
 }
 
 // "Marcar/desmarcar o dia inteiro": one click to block every period of a
-// weekday within one Segment's grid, instead of clicking each cell — and
-// one click to undo, restoring every period back to available.
-function isDayFullyUnavailable(rows: WeekGridRow[], weekday: Weekday): boolean {
-  return rows.length > 0 && rows.every((row) => isUnavailable(weekday, row.key))
+// weekday across *every* Segment's grid, instead of clicking each cell (or
+// only affecting whichever Segment happens to be displayed where the
+// button was clicked — user request 2026-09-22, since a Teacher's day off
+// is real regardless of which Segment they also teach in) — and one click
+// to undo, restoring every period back to available.
+function isDayFullyUnavailable(weekday: Weekday): boolean {
+  const allRows = availabilityGroups.value.flatMap((g) => g.rows)
+  return allRows.length > 0 && allRows.every((row) => isUnavailable(weekday, row.key))
 }
 
-function toggleDay(rows: WeekGridRow[], weekday: Weekday): void {
+function toggleDay(weekday: Weekday): void {
   if (!selectedTeacher.value) return
-  const markUnavailable = !isDayFullyUnavailable(rows, weekday)
-  for (const row of rows) {
-    const { start, end } = periodFromRowKey(row.key)
-    store.setAvailability(selectedTeacher.value.id, weekday, start, end, markUnavailable)
+  const markUnavailable = !isDayFullyUnavailable(weekday)
+  for (const group of availabilityGroups.value) {
+    for (const row of group.rows) {
+      const { start, end } = periodFromRowKey(row.key)
+      store.setAvailability(selectedTeacher.value.id, weekday, start, end, markUnavailable)
+    }
   }
 }
 </script>
@@ -239,6 +245,8 @@ function toggleDay(rows: WeekGridRow[], weekday: Weekday): void {
     <p class="muted">
       Por padrão o professor está disponível em todo horário. Clique em uma célula para marcá-la
       como indisponível (ex.: apenas terça à tarde) — clique novamente para voltar a disponível.
+      "Bloquear dia"/"Liberar dia" afeta o dia inteiro em todos os segmentos de uma vez, não só o
+      segmento onde o botão foi clicado.
     </p>
 
     <div
@@ -254,14 +262,10 @@ function toggleDay(rows: WeekGridRow[], weekday: Weekday): void {
             <button
               type="button"
               class="btn btn-sm day-toggle"
-              :aria-label="`Marcar/desmarcar ${column.label} inteira (${group.segmentName ?? ''})`"
-              @click="toggleDay(group.rows, column.key as Weekday)"
+              :aria-label="`Marcar/desmarcar ${column.label} inteira em todos os segmentos`"
+              @click="toggleDay(column.key as Weekday)"
             >
-              {{
-                isDayFullyUnavailable(group.rows, column.key as Weekday)
-                  ? 'Liberar dia'
-                  : 'Bloquear dia'
-              }}
+              {{ isDayFullyUnavailable(column.key as Weekday) ? 'Liberar dia' : 'Bloquear dia' }}
             </button>
           </div>
         </template>
