@@ -59,6 +59,15 @@ Profiles in it."
 
 ## Notes
 
+- **Palette adjustment, user-requested (2026-09-22)**: the original 8
+  colors had two that read as orange (Laranja/Âmbar) and two that read as
+  red (Rosa/Vermelho) — too close to tell apart at a glance, defeating the
+  point of a color-coded switcher. Rosa (`#db2777`) replaced with Amarelo
+  (`#eab308`); Âmbar (`#d97706`) replaced with Preto (`#111827`) —
+  `entities/profile.ts`'s `PROFILE_COLORS`. Existing color ids not in the
+  new set fall back to the first color (`profileColorHex`'s existing `??`
+  default) rather than erroring — not a concern in practice yet, since no
+  real Profile has been colored through this feature before now.
 - **Follow-up, user-requested (2026-09-22)**: the Profile name is now
   woven into both export paths, so a downloaded file is identifiable
   without opening it. `persistence/exportImport.ts`'s `buildExport` gained

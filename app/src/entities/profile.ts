@@ -17,15 +17,23 @@ export interface ProfileColor {
   hex: string
 }
 
-/** Small, fixed, visually-distinct set — picked so the active one reads clearly as a header accent and a sidebar border alike. */
+/**
+ * Small, fixed, visually-distinct set — picked so the active one reads
+ * clearly as a header accent and a sidebar border alike.
+ *
+ * User-requested adjustment (2026-09-22): the original set had two
+ * orange-ish colors (Laranja/Âmbar) and two red-ish ones (Rosa/Vermelho),
+ * too close to tell apart at a glance — Rosa replaced with Amarelo, Âmbar
+ * replaced with Preto.
+ */
 export const PROFILE_COLORS: ProfileColor[] = [
   { id: 'azul', label: 'Azul', hex: '#2f6fed' },
   { id: 'verde', label: 'Verde', hex: '#16a34a' },
   { id: 'roxo', label: 'Roxo', hex: '#7c3aed' },
   { id: 'laranja', label: 'Laranja', hex: '#ea580c' },
-  { id: 'rosa', label: 'Rosa', hex: '#db2777' },
+  { id: 'amarelo', label: 'Amarelo', hex: '#eab308' },
   { id: 'turquesa', label: 'Turquesa', hex: '#0891b2' },
-  { id: 'ambar', label: 'Âmbar', hex: '#d97706' },
+  { id: 'preto', label: 'Preto', hex: '#111827' },
   { id: 'vermelho', label: 'Vermelho', hex: '#dc2626' },
 ]
 
