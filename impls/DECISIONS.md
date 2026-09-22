@@ -1010,4 +1010,36 @@ Template for a new entry:
 - **Affected epics/tasks**: E03 (`SubjectsConfig.vue`), `done` — a
   retrofit, not a reopening of its checkpoint.
 
+## D-45 — Conflict tooltip: a real bulleted `<ul>`, teleported to escape WeekGrid's scroll clipping
+
+- **Date**: 2026-09-22
+- **Type**: Implementation-only.
+- **Spec refs**: FR-18 (live conflict flag), IMPL.md's `WeekGrid.vue`.
+- **What changes**: `ScheduleGrid.vue`'s conflict-flagged cell (`.pill.conflict`,
+  FR-18) no longer uses a native `title="msg1 msg2"` tooltip — every
+  message ran together as one paragraph, with no way to get real bullet
+  points out of a `title` attribute. It's now a genuine `<ul><li>` list,
+  shown on `@mouseenter`/hidden on `@mouseleave` (not CSS `:hover`) and
+  rendered via `<Teleport to="body">`, positioned with inline `top`/`left`
+  computed from the hovered pill's own `getBoundingClientRect()`. The
+  Teleport turned out to be load-bearing, not just tidiness: a first pass
+  using plain `position: absolute` + CSS `:hover` was visually clipped —
+  `WeekGrid.vue`'s scroll wrapper sets `overflow-x: auto`, which per the
+  CSS spec implicitly computes `overflow-y: auto` too, so any popover
+  taller than the current row got cut off at the wrapper's edge the moment
+  it grew past one line. Confirmed both broken (clipped, via a full-page
+  screenshot) and fixed (unclipped, `getBoundingClientRect()` matching the
+  teleported element's actual on-screen box) against a hand-built two
+  -violation fixture in a headless-Chromium session.
+- **Why**: user-requested — multiple stacked Violation messages on one
+  cell read as a run-on paragraph in the native tooltip; asked for bullet
+  points, native if possible, a custom component if not. Concluded native
+  couldn't do it reliably (no cross-browser-guaranteed way to force line
+  breaks + bullet glyphs from a `title` attribute, and no way to verify it
+  at all — native OS tooltips aren't part of the page's render tree, so
+  nothing in this project's screenshot-based verification convention can
+  actually confirm how they'd render) and built the custom list instead.
+- **Affected epics/tasks**: E09 (`ScheduleGrid.vue`), `done` — a retrofit,
+  not a reopening of its checkpoint.
+
 *(entries above are the most recent)*

@@ -182,6 +182,23 @@ function conflictMessages(weekday: string, timeSlotId: string): string[] | undef
   return conflictsByCell.value.get(`${weekday}:${timeSlotId}`)
 }
 
+// User request (2026-09-22): a native `title` tooltip renders every message
+// as one run-on line — no bullets. This is a real <ul>, teleported to
+// <body> and positioned from the hovered pill's own rect so it can't be
+// clipped by WeekGrid's scroll wrapper (see the template comment above the
+// Teleport).
+const hoveredConflict = ref<{ top: number; left: number; messages: string[] } | null>(null)
+
+function showConflictTooltip(event: MouseEvent, messages: string[] | undefined): void {
+  if (!messages) return
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  hoveredConflict.value = { top: rect.bottom + 4, left: rect.left, messages }
+}
+
+function hideConflictTooltip(): void {
+  hoveredConflict.value = null
+}
+
 // FR-19: a slot-level Note, one editor open at a time.
 const noteEditorSlot = ref<{ weekday: string; timeSlotId: string } | null>(null)
 const noteDraft = ref('')
@@ -260,7 +277,8 @@ function deleteNote(weekday: string, timeSlotId: string): void {
               selected: isPickedUp(column.key, row.key),
               conflict: conflictMessages(column.key, row.key),
             }"
-            :title="conflictMessages(column.key, row.key)?.join(' ')"
+            @mouseenter="showConflictTooltip($event, conflictMessages(column.key, row.key))"
+            @mouseleave="hideConflictTooltip"
           >
             {{ cellContent(column.key, row.key)!.subject }}<br />
             <small>{{ cellContent(column.key, row.key)!.teacher }}</small>
@@ -308,6 +326,24 @@ function deleteNote(weekday: string, timeSlotId: string): void {
       </div>
     </template>
   </WeekGrid>
+
+  <!--
+    Teleported to <body> and positioned via JS (not CSS `position: absolute`
+    + `:hover`): WeekGrid's horizontal-scroll wrapper sets `overflow-x:
+    auto`, which per the CSS spec implicitly computes `overflow-y: auto`
+    too, clipping an absolutely-positioned popover the moment it grows
+    taller than the visible row — a plain hover tooltip was visually cut
+    off there. Teleporting escapes that ancestor entirely.
+  -->
+  <Teleport to="body">
+    <ul
+      v-if="hoveredConflict"
+      class="conflict-tooltip"
+      :style="{ top: `${hoveredConflict.top}px`, left: `${hoveredConflict.left}px` }"
+    >
+      <li v-for="msg in hoveredConflict.messages" :key="msg">{{ msg }}</li>
+    </ul>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -326,6 +362,31 @@ function deleteNote(weekday: string, timeSlotId: string): void {
 .pill.conflict {
   border-color: var(--color-danger-border);
   background: var(--color-danger-bg);
+}
+
+/** Teleported to <body> and positioned via inline `top`/`left` (see the template) — `position: fixed` so it's placed relative to the viewport, not whatever it happens to render next to in the DOM. */
+.conflict-tooltip {
+  position: fixed;
+  z-index: 1000;
+  margin: 0;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  min-width: 14rem;
+  max-width: 20rem;
+  list-style: disc;
+  text-align: left;
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--color-danger);
+  background: var(--color-surface);
+  border: 1px solid var(--color-danger-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+}
+
+.conflict-tooltip li + li {
+  margin-top: var(--space-1);
 }
 
 /** FR-31: a Joint Session occurrence reads as visually distinct from an ordinary Subject/Teacher period. */
