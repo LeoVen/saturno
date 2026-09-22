@@ -82,16 +82,25 @@ p {
 
 /* ---------- Layout ---------- */
 
+.app-root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
 .app-shell {
   display: flex;
-  min-height: 100vh;
   align-items: stretch;
+  flex: 1;
+  min-height: 0;
 }
 
 .sidebar {
   flex: 0 0 220px;
   background: var(--color-surface);
   border-right: 1px solid var(--color-border);
+  /* INTERLUDE-2 (D-42): the active Profile's color as a standing accent, so it reads even without looking at the header. */
+  border-left: 4px solid var(--profile-color, transparent);
   padding: var(--space-5) var(--space-3);
   display: flex;
   flex-direction: column;
@@ -339,4 +348,121 @@ select.input:focus {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+}
+
+/* ---------- Header / Profile switcher (INTERLUDE-2, D-42) ---------- */
+
+.app-header {
+  flex: 0 0 auto;
+  padding: var(--space-2) var(--space-4);
+  background: var(--profile-color-soft, var(--color-surface));
+  border-bottom: 3px solid var(--profile-color, var(--color-border));
+}
+
+.color-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  display: inline-block;
+}
+
+.profile-switcher {
+  position: relative;
+  display: inline-block;
+}
+
+.profile-switcher-trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font: inherit;
+  font-weight: 600;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.profile-switcher-trigger:hover {
+  background: var(--color-bg);
+}
+
+.profile-switcher-trigger .caret {
+  color: var(--color-text-muted);
+  font-size: 0.75em;
+}
+
+.profile-switcher-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+}
+
+.profile-switcher-panel {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  z-index: 11;
+  min-width: 220px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.profile-switcher-panel hr {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: var(--space-1) 0;
+}
+
+.profile-switcher-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  text-align: left;
+  width: 100%;
+  padding: var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.profile-switcher-item:hover {
+  background: var(--color-bg);
+}
+
+.profile-switcher-item.active {
+  background: var(--color-selected-bg);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+/* ---------- Color picker (Perfis, INTERLUDE-2) ---------- */
+
+.color-picker {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+
+.color-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+.color-swatch.selected {
+  border-color: var(--color-text);
 }

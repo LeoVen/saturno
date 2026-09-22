@@ -35,3 +35,9 @@ export async function writeStoreState(storeId: string, state: unknown): Promise<
   // (e.g. a stray class instance) — fine at this scale (TR-10).
   await db.put(PINIA_STATE_STORE, JSON.parse(JSON.stringify(state)), storeId)
 }
+
+/** INTERLUDE-2: removes one profile-scoped key's saved state entirely — used when a Profile is deleted, so its data doesn't linger orphaned in IndexedDB. A no-op if the key was never written. */
+export async function deleteStoreState(storeId: string): Promise<void> {
+  const db = await getDb()
+  await db.delete(PINIA_STATE_STORE, storeId)
+}

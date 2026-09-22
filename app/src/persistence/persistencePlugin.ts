@@ -10,13 +10,23 @@ import { readStoreState, writeStoreState } from './db'
 const EPHEMERAL_STORE_IDS = new Set(['generation'])
 
 /**
+ * INTERLUDE-2 (D-42): these three are persisted, but not through this
+ * generic plugin — `profilesPersistence.ts` owns them instead, since
+ * `entities`/`scheduleVersions` need a Profile-namespaced IndexedDB key
+ * (not their bare store id) and have to re-hydrate whenever the active
+ * Profile switches, and `profiles` itself needs its first-load migration
+ * finished before any of that can happen.
+ */
+const PROFILE_MANAGED_STORE_IDS = new Set(['profiles', 'entities', 'scheduleVersions'])
+
+/**
  * Hydrate-on-load / write-through persistence (TR-5, IMPL.md §7 skeleton).
  * Every store this plugin is applied to is loaded from IndexedDB on
  * creation and re-written on every mutation. Later epics (E02+) build real
  * entity/schedule-version stores on top of this same pattern.
  */
 export function persistencePlugin({ store }: PiniaPluginContext): void {
-  if (EPHEMERAL_STORE_IDS.has(store.$id)) return
+  if (EPHEMERAL_STORE_IDS.has(store.$id) || PROFILE_MANAGED_STORE_IDS.has(store.$id)) return
 
   void (async () => {
     const saved = await readStoreState(store.$id)
