@@ -100,8 +100,35 @@ function addBreak(): void {
   <h2>Segmentos</h2>
 
   <div class="card">
+    <button
+      v-if="store.segments.length > 1"
+      type="button"
+      class="btn btn-sm"
+      style="margin-bottom: var(--space-2)"
+      @click="store.sortSegmentsByName()"
+    >
+      Ordenar por nome (A-Z)
+    </button>
     <ul class="pill-list">
-      <li v-for="segment in store.segments" :key="segment.id">
+      <li v-for="(segment, index) in store.segments" :key="segment.id">
+        <button
+          type="button"
+          class="btn btn-sm"
+          :disabled="index === 0"
+          aria-label="Mover para cima"
+          @click="store.moveSegment(segment.id, 'up')"
+        >
+          ▲
+        </button>
+        <button
+          type="button"
+          class="btn btn-sm"
+          :disabled="index === store.segments.length - 1"
+          aria-label="Mover para baixo"
+          @click="store.moveSegment(segment.id, 'down')"
+        >
+          ▼
+        </button>
         <button
           type="button"
           class="pill"

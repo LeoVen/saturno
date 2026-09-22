@@ -225,6 +225,16 @@ export const useEntitiesStore = defineStore('entities', {
       this.pruneJointSessionClasses(orphanedClassIds)
     },
 
+    /** Segments have no natural sort key (unlike Time Slots/Breaks, D-07) — the user orders them by hand, same as Subjects/Teachers (D-26). */
+    moveSegment(id: string, direction: MoveDirection): void {
+      this.segments = moveItem(this.segments, id, direction)
+    },
+
+    /** One-off bulk reorder to alphabetical-by-name (mirrors `sortSubjectsByName`/`sortTeachersByName`, D-26/D-44) — not a standing invariant: `moveSegment` still freely rearranges the result afterward. */
+    sortSegmentsByName(): void {
+      this.segments = [...this.segments].sort((a, b) => a.name.localeCompare(b.name))
+    },
+
     addTimeSlot(segmentId: string, start: string, end: string): string | undefined {
       const segment = this.segmentById(segmentId)
       if (!segment || !isValidRange(start, end)) return undefined

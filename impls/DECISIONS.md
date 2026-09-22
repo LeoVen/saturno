@@ -1071,4 +1071,22 @@ Template for a new entry:
   correctness fix to an already-shipped screen, not a reopening of its
   checkpoint.
 
+## D-47 — Segments gain manual reorder + "Ordenar por nome (A-Z)", same as Teachers/Subjects
+
+- **Date**: 2026-09-22
+- **Type**: Implementation-only (retrofit, mirrors an existing pattern).
+- **Spec refs**: FR-6. Directly extends D-26/D-44.
+- **What changes**: `entities.ts` gains `moveSegment(id, direction)`
+  (`moveItem`, same helper D-26's `moveSubject`/`moveTeacher` already use)
+  and `sortSegmentsByName()` (one-off alphabetical bulk sort, mirrors
+  D-44's `sortSubjectsByName`) — Segments previously had neither, only
+  insertion order with no way to change it. `SegmentsConfig.vue` gets the
+  same ▲/▼ buttons and "Ordenar por nome (A-Z)" button the Subjects/
+  Teachers screens already have, identical placement/gating.
+- **Why**: user-requested, "same side effects as teachers and subjects" —
+  Segment display order (Exportar's sheet order, any Segment-grouped
+  dropdown) had no user-facing control at all until now.
+- **Affected epics/tasks**: E02 (`SegmentsConfig.vue`), `done` — a
+  retrofit, not a reopening of its checkpoint.
+
 *(entries above are the most recent)*

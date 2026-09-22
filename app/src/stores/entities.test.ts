@@ -24,6 +24,38 @@ describe('entities store — Segments', () => {
     store.removeSegment(id)
     expect(store.segments).toHaveLength(0)
   })
+
+  it('moveSegment reorders one position at a time, no-op at the boundaries', () => {
+    const store = useEntitiesStore()
+    const a = store.addSegment('A')
+    const b = store.addSegment('B')
+    const c = store.addSegment('C')
+
+    store.moveSegment(b, 'up')
+    expect(store.segments.map((s) => s.id)).toEqual([b, a, c])
+
+    store.moveSegment(b, 'down')
+    store.moveSegment(b, 'down')
+    expect(store.segments.map((s) => s.id)).toEqual([a, c, b])
+
+    store.moveSegment(a, 'up')
+    store.moveSegment(b, 'down')
+    expect(store.segments.map((s) => s.id)).toEqual([a, c, b])
+  })
+
+  it('sortSegmentsByName is a one-off bulk sort, not a standing order', () => {
+    const store = useEntitiesStore()
+    const fundamental = store.addSegment('Ensino Fundamental')
+    const infantil = store.addSegment('Educação Infantil')
+    const medio = store.addSegment('Ensino Médio')
+
+    store.sortSegmentsByName()
+    expect(store.segments.map((s) => s.id)).toEqual([infantil, fundamental, medio])
+
+    // Still freely reorderable afterward — sorting isn't an invariant.
+    store.moveSegment(medio, 'up')
+    expect(store.segments.map((s) => s.id)).toEqual([infantil, medio, fundamental])
+  })
 })
 
 describe('entities store — Time Slots', () => {
