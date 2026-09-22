@@ -117,6 +117,22 @@ mod tests {
         }
     }
 
+    fn placement(
+        class_id: &str,
+        subject_id: &str,
+        teacher_id: &str,
+        weekday: Weekday,
+        time_slot_id: &str,
+    ) -> PlacedPeriod {
+        PlacedPeriod {
+            class_id: class_id.to_string(),
+            subject_id: subject_id.to_string(),
+            teacher_id: teacher_id.to_string(),
+            weekday,
+            time_slot_id: time_slot_id.to_string(),
+        }
+    }
+
     #[test]
     fn generates_a_verified_feasible_schedule_for_a_simple_school() {
         let input = ScheduleInput {
@@ -258,36 +274,150 @@ mod tests {
         assert_eq!(reason.subject_id.as_deref(), Some("math"));
     }
 
+    /// 2026-09-22: `consecutivePeriods` is a *ceiling* on an Assignment's
+    /// own same-(Class,Subject) run length ("up to N in a row is
+    /// allowed"), not a required grouping — user-requested clarification,
+    /// since the original decompose-into-fixed-blocks reading made a fully
+    /// spread-out week wrongly count as a violation. These three tests
+    /// pin down the corrected contract; they replace
+    /// `double_period_assignments_are_placed_as_a_genuinely_consecutive_block`,
+    /// whose name claimed a guarantee ("genuinely consecutive") that never
+    /// actually held beyond this greedy search's candidate-ordering
+    /// happening to try the same day first on an otherwise-unconstrained
+    /// case.
     #[test]
-    fn double_period_assignments_are_placed_as_a_genuinely_consecutive_block() {
+    fn a_fully_spread_out_schedule_is_valid_even_at_a_high_consecutive_periods_setting() {
         let input = ScheduleInput {
             segments: vec![segment("seg1", 6, 7)],
             grades: vec![grade("g1", "seg1")],
             classes: vec![class("c1", "g1")],
             subjects: vec![subject("chem")],
             teachers: vec![teacher("t1")],
+            // consecutivePeriods 3 allows up to a triple block — but never
+            // requires one, so 3 occurrences on 3 separate weekdays (never
+            // adjacent to each other) must be just as valid.
+            assignments: vec![assignment("a1", "c1", "chem", &["t1"], 3, 3, true)],
+            joint_sessions: Vec::new(),
+        };
+        let schedule = Schedule {
+            placements: vec![
+                placement("c1", "chem", "t1", Weekday::Mon, "seg1-slot-0"),
+                placement("c1", "chem", "t1", Weekday::Wed, "seg1-slot-0"),
+                placement("c1", "chem", "t1", Weekday::Fri, "seg1-slot-0"),
+            ],
+            joint_session_placements: Vec::new(),
+        };
+        assert!(verify::verify(&input, &schedule).is_empty());
+    }
+
+    #[test]
+    fn a_run_exceeding_the_assignments_own_ceiling_is_flagged_even_though_it_fits_under_the_absolute_max()
+     {
+        let input = ScheduleInput {
+            segments: vec![segment("seg1", 6, 7)],
+            grades: vec![grade("g1", "seg1")],
+            classes: vec![class("c1", "g1")],
+            subjects: vec![subject("chem")],
+            teachers: vec![teacher("t1")],
+            // consecutivePeriods 2: a run of 3 is within FR-10's absolute
+            // ceiling of 3, but exceeds THIS Assignment's own configured
+            // ceiling — must still be flagged.
+            assignments: vec![assignment("a1", "c1", "chem", &["t1"], 3, 2, true)],
+            joint_sessions: Vec::new(),
+        };
+        let schedule = Schedule {
+            placements: vec![
+                placement("c1", "chem", "t1", Weekday::Mon, "seg1-slot-0"),
+                placement("c1", "chem", "t1", Weekday::Mon, "seg1-slot-1"),
+                placement("c1", "chem", "t1", Weekday::Mon, "seg1-slot-2"),
+            ],
+            joint_session_placements: Vec::new(),
+        };
+        let violations = verify::verify(&input, &schedule);
+        assert!(violations.iter().any(
+            |v| matches!(v, Violation::ConsecutiveCeilingExceeded { run_length, .. } if *run_length == 3)
+        ));
+    }
+
+    #[test]
+    fn spreading_across_days_makes_feasible_what_a_forced_block_would_not_have_been() {
+        // A Teacher free for exactly one period/day: Monday's first period,
+        // Tuesday's second — never two adjacent periods on the same day.
+        // Under the old "decompose into consecutivePeriods-sized blocks"
+        // behavior this was infeasible (no day ever offers a genuine
+        // 2-block); under the ceiling-only behavior it's straightforward —
+        // each occurrence just lands on its own day.
+        let mut t1 = teacher("t1");
+        t1.unavailability = vec![
+            UnavailabilityRange {
+                id: "u-mon".into(),
+                weekday: Weekday::Mon,
+                start: "07:50".into(),
+                end: "23:59".into(),
+            },
+            UnavailabilityRange {
+                id: "u-tue".into(),
+                weekday: Weekday::Tue,
+                start: "00:00".into(),
+                end: "07:50".into(),
+            },
+            UnavailabilityRange {
+                id: "u-wed".into(),
+                weekday: Weekday::Wed,
+                start: "00:00".into(),
+                end: "23:59".into(),
+            },
+            UnavailabilityRange {
+                id: "u-thu".into(),
+                weekday: Weekday::Thu,
+                start: "00:00".into(),
+                end: "23:59".into(),
+            },
+            UnavailabilityRange {
+                id: "u-fri".into(),
+                weekday: Weekday::Fri,
+                start: "00:00".into(),
+                end: "23:59".into(),
+            },
+        ];
+
+        let input = ScheduleInput {
+            segments: vec![segment("seg1", 2, 7)],
+            grades: vec![grade("g1", "seg1")],
+            classes: vec![class("c1", "g1")],
+            subjects: vec![subject("chem")],
+            teachers: vec![t1],
             assignments: vec![assignment("a1", "c1", "chem", &["t1"], 2, 2, false)],
             joint_sessions: Vec::new(),
         };
-        let GenerateResult::Feasible { schedule } = constructor::generate_quick(&input) else {
-            panic!("expected feasible");
-        };
-        assert!(verify::verify(&input, &schedule).is_empty());
-        assert_eq!(schedule.placements.len(), 2);
+
+        let result = constructor::generate_quick(&input);
+        match result {
+            GenerateResult::Feasible { schedule } => {
+                assert!(verify::verify(&input, &schedule).is_empty());
+                assert_eq!(schedule.placements.len(), 2);
+            }
+            GenerateResult::Infeasible { reason } => {
+                panic!("expected this to be feasible: {}", reason.message)
+            }
+        }
     }
 
     #[test]
     fn never_exceeds_three_consecutive_same_subject_periods() {
-        // 9 weekly occurrences of one Subject, allowed to repeat same-day,
-        // in a Segment with only 9 slots/day across the week — the
-        // Constructor must never stack more than 3 in a row for the Class.
+        // 9 weekly occurrences of one Subject at consecutivePeriods 3 (its
+        // maximum legal value — see entities.ts's `MAX_CONSECUTIVE_PERIODS`
+        // — which coincides with FR-10's absolute ceiling), allowed to
+        // repeat same-day, in a Segment with only 9 slots/day across the
+        // week — the Constructor must never stack more than 3 in a row for
+        // the Class.
         let input = ScheduleInput {
             segments: vec![segment("seg1", 9, 7)],
             grades: vec![grade("g1", "seg1")],
             classes: vec![class("c1", "g1")],
             subjects: vec![subject("gym")],
             teachers: vec![teacher("t1")],
-            assignments: vec![assignment("a1", "c1", "gym", &["t1"], 9, 1, true)],
+            assignments: vec![assignment("a1", "c1", "gym", &["t1"], 9, 3, true)],
             joint_sessions: Vec::new(),
         };
         let GenerateResult::Feasible { schedule } = constructor::generate_quick(&input) else {
@@ -820,18 +950,21 @@ mod tests {
     #[test]
     fn same_day_blocks_of_one_assignment_may_merge_when_repetition_is_disallowed() {
         // Regression test distilled from a real user report: a Teacher
-        // restricted to exactly 2 weekdays, teaching a Subject with an odd
-        // weeklyOccurrences (5) at consecutivePeriods 2 -> blocks [2, 2, 1]
-        // (D-18's floor-division decomposition), with
-        // allowSameDayRepetition false. The only way to fit 3 blocks into 2
-        // available days is for the remainder single to merge adjacently
-        // with one of the doubles into one legitimate 3-period run — which
-        // is allowed (it's still exactly one run for that day, not two),
-        // but the Constructor previously refused to ever place a second
-        // block of the same Subject on a day that already had one, even
-        // when the placement would merge rather than create a second,
-        // separate run. That bug made this genuinely feasible case (and
-        // the real user's much larger schedule) come back infeasible.
+        // restricted to exactly 2 weekdays, teaching a Subject with 5
+        // weeklyOccurrences at consecutivePeriods 3 (the per-Assignment
+        // ceiling — 2026-09-22: `consecutivePeriods` bounds how long a run
+        // is allowed to get, not a required grouping, so with only 2
+        // available days the 5 occurrences must land as e.g. a 3-run and a
+        // 2-run), with allowSameDayRepetition false. Placing the 4th/5th
+        // single-period task on a day that already has periods of this
+        // Subject must be allowed to *merge* adjacently into one legitimate
+        // run (still exactly one run for that day, not two) rather than
+        // being wrongly refused just because the day already has one — the
+        // Constructor previously refused to ever place a second block of
+        // the same Subject on a day that already had one, even when the
+        // placement would merge rather than create a second, separate run.
+        // That bug made this genuinely feasible case (and the real user's
+        // much larger schedule) come back infeasible.
         let mut teacher = teacher("carlos");
         teacher.unavailability = [Weekday::Mon, Weekday::Thu, Weekday::Fri]
             .iter()
@@ -855,7 +988,7 @@ mod tests {
                 "matematica",
                 &["carlos"],
                 5,
-                2,
+                3,
                 false,
             )],
             joint_sessions: Vec::new(),

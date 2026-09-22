@@ -7,7 +7,7 @@
 
 use crate::model::{
     Assignment, GenerateResult, Index, InfeasibilityReport, JointSession, JointSessionPlacement,
-    MAX_CONSECUTIVE_PERIODS, PlacedPeriod, Schedule, ScheduleInput, Teacher, WEEKDAYS, Weekday,
+    PlacedPeriod, Schedule, ScheduleInput, Teacher, WEEKDAYS, Weekday,
 };
 use crate::verify::to_generate_result;
 use std::collections::{HashMap, HashSet};
@@ -23,6 +23,12 @@ const SEARCH_BUDGET: u64 = 2_000_000;
 enum Task {
     Assignment {
         assignment_index: usize,
+        /// Always 1 (2026-09-22) — kept as a field (rather than removed)
+        /// because `SearchState::commit`/`undo`/`candidates_for_task` are
+        /// already correctly generic over an arbitrary block size, and a
+        /// future E13 Scorer/Refiner "prefer grouping when it doesn't cost
+        /// feasibility" pass may want to reintroduce multi-period blocks as
+        /// a *preference* without redoing this plumbing.
         block_size: u32,
     },
     /// FR-28: one weekly occurrence of a Joint Session — always exactly one
@@ -31,11 +37,21 @@ enum Task {
     JointSession { session_index: usize },
 }
 
-/// Decomposes each Assignment's `weeklyOccurrences` into placement blocks of
-/// `consecutivePeriods` size (a leftover remainder, if any, becomes its own
-/// smaller block) — see impls/DECISIONS.md for why floor-division is the
-/// chosen arithmetic (FR-8/FR-10 don't pin this down explicitly) — and each
-/// Joint Session's `weeklyOccurrences` into that many single-period tasks.
+/// Decomposes each Assignment's `weeklyOccurrences` into that many
+/// independent single-period tasks, and each Joint Session's
+/// `weeklyOccurrences` into that many single-period tasks.
+///
+/// `consecutivePeriods` is a *ceiling* on how long a same-(Class,Subject)
+/// run is allowed to get (enforced in `candidates_for_task` below), not a
+/// required grouping (2026-09-22, user-requested clarification of FR-10/
+/// IMPL.md's original "decompose into consecutivePeriods-sized blocks"
+/// reading) — a fully spread-out week is always a legitimate outcome, and
+/// two single-period tasks landing on adjacent slots (or not) is purely a
+/// consequence of where the search finds room, never something this
+/// decomposition pre-commits to. Whether the search happens to *prefer*
+/// grouping when there's room to is a quality concern (E13's Scorer/
+/// Refiner), out of scope for this feasibility-first Constructor.
+///
 /// Joint Session tasks are placed first (FR-25/29): they constrain several
 /// Classes and Teachers simultaneously, so committing to them before any
 /// single-Class Assignment claims a needed slot avoids backtracking deep
@@ -53,19 +69,10 @@ fn build_tasks(input: &ScheduleInput) -> Vec<Task> {
 
     let mut tasks = Vec::new();
     for (assignment_index, a) in input.assignments.iter().enumerate() {
-        let block = a.consecutive_periods.max(1);
-        let full_blocks = a.weekly_occurrences / block;
-        let remainder = a.weekly_occurrences % block;
-        for _ in 0..full_blocks {
+        for _ in 0..a.weekly_occurrences {
             tasks.push(Task::Assignment {
                 assignment_index,
-                block_size: block,
-            });
-        }
-        if remainder > 0 {
-            tasks.push(Task::Assignment {
-                assignment_index,
-                block_size: remainder,
+                block_size: 1,
             });
         }
     }
@@ -322,8 +329,8 @@ impl SearchState {
 
 /// Extends `size` contiguous slots starting at `start` with any
 /// same-subject run immediately adjacent on either side, returning the
-/// resulting merged run length (FR-10's 3-period ceiling is checked
-/// against this).
+/// resulting merged run length (checked against the Assignment's own
+/// `consecutivePeriods` ceiling in `candidates_for_task` below).
 fn merged_run_length(
     day_entries: &[(usize, String)],
     start: usize,
@@ -477,7 +484,12 @@ fn candidates_for_task(
                 block_size as usize,
                 &assignment.subject_id,
             );
-            if merged_len > MAX_CONSECUTIVE_PERIODS as usize {
+            // 2026-09-22: `consecutivePeriods` is this Assignment's own
+            // ceiling on a same-(Class,Subject) run — "up to N in a row is
+            // allowed," never a required minimum. Already validated 1..=3
+            // on the TS side (entities.ts's `setConsecutivePeriods`), so
+            // this is always at least as tight as FR-10's absolute 3.
+            if merged_len > assignment.consecutive_periods as usize {
                 continue;
             }
             if !assignment.allow_same_day_repetition
@@ -605,7 +617,7 @@ fn classify_reason(
                 block_size as usize,
                 &assignment.subject_id,
             );
-            if merged > MAX_CONSECUTIVE_PERIODS as usize {
+            if merged > assignment.consecutive_periods as usize {
                 continue;
             }
             if !assignment.allow_same_day_repetition

@@ -399,11 +399,14 @@ fn compute_runs(sorted_unique_indices: &[usize]) -> Vec<(usize, usize)> {
     runs
 }
 
-/// Three checks that all key off the same "maximal contiguous same-(Class,
-/// Subject) run per weekday" computation: the 3-period ceiling (FR-10), the
-/// double/triple block actually being consecutive (FR-14), and same-day
-/// repetition (FR-12, D-13-style precise definition: more than one run on a
-/// day for a (Class, Subject) that hasn't opted in).
+/// Two checks that key off the same "maximal contiguous same-(Class,
+/// Subject) run per weekday" computation: the per-Assignment consecutive
+/// -periods ceiling (FR-10, 2026-09-22: `consecutivePeriods` is "up to N in
+/// a row is allowed," not a required minimum — a fully spread-out week is
+/// always valid, so there is no corresponding "not grouped enough" check
+/// here, only "grouped too much") and same-day repetition (FR-12, D-13
+/// -style precise definition: more than one run on a day for a (Class,
+/// Subject) that hasn't opted in).
 fn check_runs(idx: &Index, input: &ScheduleInput, resolved: &[Resolved], out: &mut Vec<Violation>) {
     let mut by_key: HashMap<(String, String, Weekday), Vec<usize>> = HashMap::new();
     for r in resolved {
@@ -419,33 +422,42 @@ fn check_runs(idx: &Index, input: &ScheduleInput, resolved: &[Resolved], out: &m
         .map(|a| ((a.class_id.as_str(), a.subject_id.as_str()), a))
         .collect();
 
-    let mut run_lengths_by_assignment: HashMap<(String, String), Vec<usize>> = HashMap::new();
-
     for ((class_id, subject_id, weekday), mut indices) in by_key {
         indices.sort_unstable();
         indices.dedup();
         let runs = compute_runs(&indices);
 
+        let assignment = assignment_by_cs
+            .get(&(class_id.as_str(), subject_id.as_str()))
+            .copied();
+        // Falls back to the absolute FR-10 ceiling only if this (Class,
+        // Subject) has no matching Assignment at all — shouldn't normally
+        // happen (every real placement comes from one), but `verify` must
+        // stay correct standalone against arbitrary/hand-edited input.
+        let ceiling = assignment
+            .map(|a| a.consecutive_periods)
+            .unwrap_or(MAX_CONSECUTIVE_PERIODS);
+
         for &(_, len) in &runs {
-            if len > MAX_CONSECUTIVE_PERIODS as usize {
+            if len > ceiling as usize {
                 out.push(Violation::ConsecutiveCeilingExceeded {
                     class_id: class_id.clone(),
                     subject_id: subject_id.clone(),
                     weekday,
                     run_length: len,
                     message: format!(
-                        "A turma {} tem {} aulas seguidas de {} na {}, acima do limite de {}.",
+                        "A turma {} tem {} aulas seguidas de {} na {}, acima do limite de {} aula(s) consecutiva(s) configurado para esta disciplina.",
                         idx.class_label(&class_id),
                         len,
                         idx.subject_label(&subject_id),
                         weekday.label_ptbr(),
-                        MAX_CONSECUTIVE_PERIODS
+                        ceiling
                     ),
                 });
             }
         }
 
-        if let Some(assignment) = assignment_by_cs.get(&(class_id.as_str(), subject_id.as_str()))
+        if let Some(assignment) = assignment
             && !assignment.allow_same_day_repetition
             && runs.len() > 1
         {
@@ -459,44 +471,6 @@ fn check_runs(idx: &Index, input: &ScheduleInput, resolved: &[Resolved], out: &m
                     idx.class_label(&class_id),
                     idx.subject_label(&subject_id),
                     weekday.label_ptbr()
-                ),
-            });
-        }
-
-        run_lengths_by_assignment
-            .entry((class_id, subject_id))
-            .or_default()
-            .extend(runs.iter().map(|&(_, len)| len));
-    }
-
-    for a in &input.assignments {
-        if a.consecutive_periods <= 1 {
-            continue;
-        }
-        let expected_blocks = a.weekly_occurrences / a.consecutive_periods;
-        if expected_blocks == 0 {
-            continue;
-        }
-        let lens = run_lengths_by_assignment
-            .get(&(a.class_id.clone(), a.subject_id.clone()))
-            .cloned()
-            .unwrap_or_default();
-        let satisfied = lens
-            .iter()
-            .filter(|&&len| len >= a.consecutive_periods as usize)
-            .count() as u32;
-        if satisfied < expected_blocks {
-            out.push(Violation::ConsecutiveBlockBroken {
-                assignment_id: a.id.clone(),
-                class_id: a.class_id.clone(),
-                subject_id: a.subject_id.clone(),
-                message: format!(
-                    "A disciplina {} da turma {} deveria ter {} bloco(s) de {} aulas consecutivas por semana, mas apenas {} foi(ram) encontrado(s).",
-                    idx.subject_label(&a.subject_id),
-                    idx.class_label(&a.class_id),
-                    expected_blocks,
-                    a.consecutive_periods,
-                    satisfied
                 ),
             });
         }

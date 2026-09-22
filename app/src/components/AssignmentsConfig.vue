@@ -71,11 +71,13 @@ function toggleTeacher(assignmentId: string, teacherId: string, event: Event): v
 
 // D-17 precedent: never show a raw value the user didn't choose in a way
 // they'd have to decode — consecutivePeriods is an internal 1/2/3 encoding,
-// always shown through this label.
+// always shown through this label. 2026-09-22: this is a *ceiling*, not a
+// requirement — e.g. "Até 2" allows a double when there's room for one, it
+// doesn't force every occurrence into pairs.
 const CONSECUTIVE_LABELS: Record<number, string> = {
-  1: 'Nenhum (períodos independentes)',
-  2: 'Dupla (2 períodos consecutivos)',
-  3: 'Tripla (3 períodos consecutivos)',
+  1: 'Nenhum (nunca consecutivos)',
+  2: 'Até 2 (dupla permitida)',
+  3: 'Até 3 (dupla ou tripla permitida)',
 }
 
 function overloadMessage(classId: string, requiredWeekly: number, availableWeekly: number): string {
@@ -174,7 +176,7 @@ const classLoadRows = computed(() => {
           />
         </label>
         <label class="field">
-          <span class="field-label">Períodos consecutivos</span>
+          <span class="field-label">Períodos consecutivos permitidos</span>
           <select
             class="input"
             :value="currentAssignment.consecutivePeriods"

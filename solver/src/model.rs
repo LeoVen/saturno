@@ -119,9 +119,15 @@ pub struct Teacher {
     pub max_consecutive_periods: Option<u32>,
 }
 
-/// FR-10's hard ceiling: a block of consecutive same-subject periods never
-/// exceeds 3 — mirrors `app/src/entities/assignment.ts`'s
-/// `MAX_CONSECUTIVE_PERIODS`.
+/// FR-10's absolute hard ceiling: a block of consecutive same-subject
+/// periods never exceeds 3, no matter what — mirrors
+/// `app/src/entities/assignment.ts`'s `MAX_CONSECUTIVE_PERIODS`, which
+/// bounds what `Assignment::consecutive_periods` can even be set to (1-3).
+/// Only ever used directly as a fallback (an Assignment somehow missing for
+/// a placed (Class, Subject) pair) — the actual ceiling enforced for a real
+/// Assignment is always its own `consecutive_periods` (2026-09-22: a
+/// per-Assignment *ceiling*, "up to N in a row is allowed," not a required
+/// minimum grouping — see constructor.rs/verify.rs's `check_runs`).
 pub const MAX_CONSECUTIVE_PERIODS: u32 = 3;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -257,13 +263,6 @@ pub enum Violation {
         class_id: String,
         weekday: Weekday,
         time_slot_id: String,
-        message: String,
-    },
-    #[serde(rename_all = "camelCase")]
-    ConsecutiveBlockBroken {
-        assignment_id: String,
-        class_id: String,
-        subject_id: String,
         message: String,
     },
     #[serde(rename_all = "camelCase")]

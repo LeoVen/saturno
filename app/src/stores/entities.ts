@@ -591,7 +591,7 @@ export const useEntitiesStore = defineStore('entities', {
       return true
     },
 
-    /** FR-10: 1 (no block), 2 (double), or 3 (triple) — the hard 3-period ceiling is enforced here. */
+    /** FR-10: the allowed-consecutive-periods ceiling — 1 (never), 2 (up to double), or 3 (up to triple); validated against `MAX_CONSECUTIVE_PERIODS`, the absolute bound this can be set to. */
     setConsecutivePeriods(id: string, consecutivePeriods: number): boolean {
       const assignment = this.assignmentById(id)
       if (

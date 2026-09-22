@@ -898,4 +898,93 @@ Template for a new entry:
   other epic's `entities`/`scheduleVersions` reads and writes, though none
   of their own code should need to change (see that epic's Notes).
 
+## D-43 — `consecutivePeriods` is a per-Assignment ceiling, not a required grouping
+
+- **Date**: 2026-09-22
+- **Type**: Correctness fix / clarification of FR-10 (behavior, not just wording — see below).
+- **Spec refs**: FR-10 ("double/triple period flag, hard 3-period ceiling"), IMPL.md §5.1 (Constructor task decomposition).
+- **What changes**: `Assignment.consecutivePeriods` now means "a same-
+  (Class,Subject) run is allowed to get up to this long," never "must be
+  grouped into blocks of this size." Concretely:
+  - `solver/src/constructor.rs`'s `build_tasks` no longer decomposes
+    `weeklyOccurrences` into fixed `consecutivePeriods`-sized blocks (with
+    a remainder as its own smaller block) — every occurrence is now an
+    independent single-period task. Whether two of them end up adjacent is
+    purely a consequence of where the search finds room, not something
+    pre-committed to.
+  - The placement-time ceiling check (`candidates_for_task` and the dead
+    -end classifier `classify_reason`) now rejects a candidate that would
+    make a run exceed `assignment.consecutive_periods`, not the flat
+    global `MAX_CONSECUTIVE_PERIODS` (3) — so a value of 1 or 2 is now a
+    real, tighter cap than before, not just a hint to the (removed) block
+    -decomposition.
+  - `solver/src/verify.rs`'s `check_runs` — and the `ConsecutiveBlockBroken`
+    `Violation` it used to also emit ("expected N blocks of size M, found
+    fewer") — is gone entirely; there is no "not grouped enough" check
+    anymore. `ConsecutiveCeilingExceeded` now compares a run's length
+    against the matching Assignment's own `consecutivePeriods` (falling
+    back to the absolute `MAX_CONSECUTIVE_PERIODS` only if no Assignment
+    matches at all — a defensive case for arbitrary/hand-edited input).
+  - `app/src/wasm/types.ts`'s `Violation` union and
+    `entities/conflictFlags.ts` had the now-nonexistent
+    `'consecutiveBlockBroken'` case removed to match.
+  - `AssignmentsConfig.vue`'s dropdown labels changed from "Nenhum /
+    Dupla / Tripla" to "Nenhum (nunca consecutivos) / Até 2 (dupla
+    permitida) / Até 3 (dupla ou tripla permitida)" — the field label
+    itself is now "Períodos consecutivos **permitidos**."
+- **Why**: user's own words — "it does not mean that there should be two
+  consecutive ones. It means that there can be up to two consecutive ones
+  ... if the classes are all spread out, that is fine, but if they need to
+  be 2 consecutive or three, they are allowed based on this dropdown. They
+  are a fence, not a constraint." The old behavior actively worked against
+  this in two ways: (1) the Constructor could make a genuinely feasible
+  school (fully spread out) come back infeasible, purely because it
+  insisted on building fixed-size blocks instead of exploring a spread
+  -out placement; (2) because the actual enforced ceiling was always the
+  flat global 3 rather than the Assignment's own value, a school could set
+  "Até 2" and still get a real 3-in-a-row block in the generated schedule
+  without any violation ever surfacing — the setting looked honored but
+  wasn't. "Quality" preferences (e.g. *preferring* a double when there's
+  room, not just allowing one) are deliberately left to E13's Scorer/
+  Refiner per the Constructor's own existing "feasibility-first" framing —
+  not added here.
+- **Real-world consequence, found during verification**: reran the actual
+  exported school data (`export-2026-09-21.json`) through "Gerar Horário"
+  after this change and got a genuine (new) infeasibility: Carlos (6º Ano
+  A, Matemática 3, 5 weeklyOccurrences, `consecutivePeriods` 2, same-day
+  repetition off) is only available Tue/Wed — 2 days × a real ceiling of 2
+  maxes out at 4, short of the 5 needed. The old code silently used a run
+  of 3 to make this fit despite the Assignment being configured for "Até
+  2," which is exactly the kind of silent mismatch this fix closes — not a
+  regression, but this real data will need `consecutivePeriods` raised to
+  3 for that one Assignment (or occurrences reduced, or Carlos's
+  availability widened) before it generates again. Left as-is, not
+  "fixed" in the user's data — that's a configuration call for them, not
+  an implementation one.
+- **Tests**: `solver/src/lib.rs` — replaced
+  `double_period_assignments_are_placed_as_a_genuinely_consecutive_block`
+  (asserted an outcome the old code never actually guaranteed beyond
+  greedy candidate-ordering happening to try the same day first) with
+  three tests that pin down the real contract: a fully spread-out schedule
+  passing `verify` even at `consecutivePeriods` 3; a run of 3 flagged as
+  `ConsecutiveCeilingExceeded` when the Assignment's own ceiling is 2 (even
+  though 3 is within the absolute FR-10 max — proving the ceiling is now
+  per-Assignment); and a Constructor-level feasibility test where a
+  Teacher never has two adjacent free periods on any day, `consecutivePeriods`
+  2, `weeklyOccurrences` 2 — infeasible under the old forced-block
+  behavior, feasible now. Updated `never_exceeds_three_consecutive_same_subject_periods`
+  (was exercising `consecutivePeriods` 1, which now caps runs at 1 and so
+  no longer exercised the absolute-3 ceiling it was named for — changed to
+  3) and `same_day_blocks_of_one_assignment_may_merge_when_repetition_is_disallowed`
+  (was `consecutivePeriods` 2 with 5 occurrences across 2 available days —
+  genuinely infeasible under the corrected ceiling, same reasoning as the
+  Carlos case above; raised to 3, which is what the regression it guards
+  against — merging into one run rather than being wrongly refused — still
+  needs to exercise).
+- **Affected epics/tasks**: E06 (`solver/src/constructor.rs`,
+  `verify.rs`), E05 (`entities/assignment.ts`, `AssignmentsConfig.vue`),
+  E09 (`conflictFlags.ts`, `wasm/types.ts`) — all `done`; correctness/
+  semantics fixes to already-shipped modules, not a reopening of any of
+  their checkpoints.
+
 *(entries above are the most recent)*

@@ -93,13 +93,6 @@ export type Violation =
       message: string
     }
   | {
-      type: 'consecutiveBlockBroken'
-      assignmentId: string
-      classId: string
-      subjectId: string
-      message: string
-    }
-  | {
       type: 'consecutiveCeilingExceeded'
       classId: string
       subjectId: string

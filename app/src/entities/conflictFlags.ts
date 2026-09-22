@@ -33,7 +33,6 @@ function violationAppliesToPlacement(v: Violation, p: PlacedPeriod): boolean {
     case 'consecutiveCeilingExceeded':
     case 'sameDayRepetition':
       return v.classId === p.classId && v.subjectId === p.subjectId && v.weekday === p.weekday
-    case 'consecutiveBlockBroken':
     case 'occurrenceCountMismatch':
       return v.classId === p.classId && v.subjectId === p.subjectId
     case 'teacherDailyLimitExceeded':
