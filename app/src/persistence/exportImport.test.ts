@@ -28,6 +28,14 @@ describe('buildExport', () => {
     expect(result.schemaVersion).toBe(CURRENT_SCHEMA_VERSION)
     expect(result.entities.subjects).toEqual([{ id: 's1', name: 'Matemática' }])
   })
+
+  it('carries the Profile name when given, omits it entirely when not (INTERLUDE-2)', () => {
+    const withName = buildExport(EMPTY_ENTITIES, EMPTY_SCHEDULE_VERSIONS, '2026')
+    expect(withName.profileName).toBe('2026')
+
+    const withoutName = buildExport(EMPTY_ENTITIES, EMPTY_SCHEDULE_VERSIONS)
+    expect('profileName' in withoutName).toBe(false)
+  })
 })
 
 describe('parseImport', () => {

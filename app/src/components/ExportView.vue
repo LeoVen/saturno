@@ -2,12 +2,14 @@
 import { computed, ref } from 'vue'
 import { useEntitiesStore } from '../stores/entities'
 import { useScheduleVersionsStore } from '../stores/scheduleVersions'
+import { useProfilesStore } from '../stores/profiles'
 import { buildClassGridExports, buildTeacherGridExports } from '../export/scheduleExport'
 import {
   buildClassGridWorkbook,
   buildTeacherGridWorkbook,
   downloadWorkbook,
 } from '../export/xlsxExport'
+import { filenameSafe } from '../export/filename'
 import ExportGridTable from './ExportGridTable.vue'
 
 // FR-22, TR-13, IMPL.md §9: Human-Readable Export — printable (window.print,
@@ -16,6 +18,7 @@ import ExportGridTable from './ExportGridTable.vue'
 
 const entities = useEntitiesStore()
 const scheduleVersions = useScheduleVersionsStore()
+const profiles = useProfilesStore()
 
 type ExportMode = 'class' | 'teacher'
 const mode = ref<ExportMode>('class')
@@ -43,14 +46,23 @@ function triggerPrint(): void {
   window.print()
 }
 
+// INTERLUDE-2: filename carries the Profile name too, and is shown as a
+// preview before download (assumes no on-disk naming conflict — the
+// browser handles that itself, e.g. appending " (1)").
+const xlsxFilename = computed(() => {
+  const profileName = filenameSafe(profiles.activeProfile?.name ?? 'perfil')
+  const versionName = filenameSafe(scheduleVersions.activeVersion?.name ?? 'horario')
+  const suffix = mode.value === 'class' ? 'por-turma' : 'por-professor'
+  return `saturno-${profileName}-${versionName}-${suffix}.xlsx`
+})
+
 async function downloadXlsx(): Promise<void> {
-  const versionName = scheduleVersions.activeVersion?.name ?? 'horario'
   if (mode.value === 'class') {
     const workbook = buildClassGridWorkbook(classGrids.value)
-    await downloadWorkbook(workbook, `saturno-${versionName}-por-turma.xlsx`)
+    await downloadWorkbook(workbook, xlsxFilename.value)
   } else {
     const workbook = buildTeacherGridWorkbook(teacherGrids.value)
-    await downloadWorkbook(workbook, `saturno-${versionName}-por-professor.xlsx`)
+    await downloadWorkbook(workbook, xlsxFilename.value)
   }
 }
 </script>
@@ -94,6 +106,9 @@ async function downloadXlsx(): Promise<void> {
         <button type="button" class="btn btn-primary" @click="triggerPrint">Imprimir</button>
         <button type="button" class="btn" @click="downloadXlsx">Baixar .xlsx</button>
       </div>
+      <p class="muted" style="margin-top: var(--space-2)">
+        Nome do arquivo: <code>{{ xlsxFilename }}</code>
+      </p>
     </div>
 
     <div class="export-sheet">

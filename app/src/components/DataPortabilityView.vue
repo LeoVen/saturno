@@ -3,8 +3,10 @@ import { computed, ref } from 'vue'
 import ExcelJS from 'exceljs'
 import { useEntitiesStore } from '../stores/entities'
 import { useScheduleVersionsStore } from '../stores/scheduleVersions'
+import { useProfilesStore } from '../stores/profiles'
 import { buildExport, parseImport } from '../persistence/exportImport'
 import { importClassGridWorkbook } from '../export/xlsxImport'
+import { filenameSafe } from '../export/filename'
 
 // FR-23, TR-7, TR-12: full-state export/import as a single JSON file.
 // Import replaces every current entity/Schedule Version — TR-8's
@@ -13,6 +15,7 @@ import { importClassGridWorkbook } from '../export/xlsxImport'
 
 const entities = useEntitiesStore()
 const scheduleVersions = useScheduleVersionsStore()
+const profiles = useProfilesStore()
 
 const exportJson = computed(() =>
   JSON.stringify(
@@ -30,10 +33,19 @@ const exportJson = computed(() =>
         versions: scheduleVersions.versions,
         activeVersionId: scheduleVersions.activeVersionId,
       },
+      profiles.activeProfile?.name,
     ),
     null,
     2,
   ),
+)
+
+// INTERLUDE-2: the Profile name in the filename — shown as a preview so the
+// user knows what they'll get before downloading (assumes no on-disk naming
+// conflict; the browser handles that itself, e.g. appending " (1)").
+const exportFilename = computed(
+  () =>
+    `saturno-${filenameSafe(profiles.activeProfile?.name ?? 'perfil')}-${new Date().toISOString().slice(0, 10)}.json`,
 )
 
 function downloadExport(): void {
@@ -41,7 +53,7 @@ function downloadExport(): void {
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
-  anchor.download = `saturno-${new Date().toISOString().slice(0, 10)}.json`
+  anchor.download = exportFilename.value
   anchor.click()
   URL.revokeObjectURL(url)
 }
@@ -149,6 +161,9 @@ async function onXlsxFileSelected(event: Event): Promise<void> {
     <p class="muted">
       Exporta toda a configuração da escola, incluindo as versões de horário salvas, em um único
       arquivo JSON — útil para backup, trocar de computador, ou compartilhar para suporte.
+    </p>
+    <p class="muted">
+      Nome do arquivo: <code>{{ exportFilename }}</code>
     </p>
     <div class="row">
       <button type="button" class="btn btn-primary" @click="downloadExport">Baixar arquivo</button>

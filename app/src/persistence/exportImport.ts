@@ -30,6 +30,8 @@ export interface ScheduleVersionsSnapshot {
 
 export interface ExportedData {
   schemaVersion: number
+  /** INTERLUDE-2: which Profile this was exported from — informational only (not restored on import; import always targets whichever Profile is currently active). Optional since a file exported before this existed won't have it. */
+  profileName?: string
   entities: EntitiesSnapshot
   scheduleVersions: ScheduleVersionsSnapshot
 }
@@ -38,10 +40,12 @@ export interface ExportedData {
 export function buildExport(
   entities: EntitiesSnapshot,
   scheduleVersions: ScheduleVersionsSnapshot,
+  profileName?: string,
 ): ExportedData {
   return JSON.parse(
     JSON.stringify({
       schemaVersion: CURRENT_SCHEMA_VERSION,
+      profileName,
       entities,
       scheduleVersions,
     }),

@@ -59,6 +59,23 @@ Profiles in it."
 
 ## Notes
 
+- **Follow-up, user-requested (2026-09-22)**: the Profile name is now
+  woven into both export paths, so a downloaded file is identifiable
+  without opening it. `persistence/exportImport.ts`'s `buildExport` gained
+  an optional third `profileName` param, stamped as a top-level
+  `profileName` field on the JSON (informational only — `parseImport`
+  doesn't read it; import always targets whichever Profile is active).
+  Both `DataPortabilityView.vue`'s JSON filename and `ExportView.vue`'s
+  `.xlsx` filename now include `filenameSafe(profileName)` (new
+  `export/filename.ts` — strips characters invalid in a filename on
+  Windows/macOS/Linux, collapses whitespace to hyphens; applied to the
+  Schedule Version name too, for the same reason). Both screens show the
+  computed filename as a `<p class="muted">` preview above the download
+  button, updating live as you rename/switch Profiles or Schedule
+  Versions — "assuming no naming conflict" per the user's own framing,
+  i.e. this is what the browser will suggest, not a guarantee of what
+  ends up on disk (the browser itself appends e.g. " (1)" on a real
+  collision, outside the page's control).
 - **Open questions resolved during implementation (2026-09-22)**:
   - **Color palette**: 8 fixed colors (`entities/profile.ts`'s
     `PROFILE_COLORS` — Azul, Verde, Roxo, Laranja, Rosa, Turquesa, Âmbar,
