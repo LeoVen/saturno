@@ -46,6 +46,7 @@ each one — called out once here instead of repeated 14 times:
 | E13 | Deep Search | new | Time-boxed run, live progress, cancel, ranked candidates to choose from | [epics/E13-deep-search.md](epics/E13-deep-search.md) |
 | E14 | Teacher Absence & Repair | new | Mark absence → repair fills/reports vacated slots | [epics/E14-teacher-absence-repair.md](epics/E14-teacher-absence-repair.md) |
 | E15 | Excel Round-Trip Import | in-review | Export "Por Turma" .xlsx, reimport unmodified → new version restored | [epics/E15-excel-round-trip.md](epics/E15-excel-round-trip.md) |
+| INTERLUDE-2 | Profiles (Multi-Project Support) | new | Create/duplicate/switch Profiles from a header dropdown, each fully independent and color-coded | [epics/INTERLUDE-2-profiles.md](epics/INTERLUDE-2-profiles.md) |
 
 ## Sequencing notes
 
@@ -72,3 +73,9 @@ each one — called out once here instead of repeated 14 times:
   out of v1). Given a real `E<NN>` slot rather than an `INTERLUDE-N` since
   it's user- and system-visible capability, not a UI-only rework — see
   [D-41](DECISIONS.md).
+- **INTERLUDE-2 added after E15**: user-requested — multi-Profile support
+  (switch/duplicate/color-code independent datasets). Also new capability,
+  not a UI-only rework, so by the rule just above it would get a real
+  `E<NN>` (E16); named `INTERLUDE-2` anyway because the user asked for it
+  by that name specifically. Noted here so the naming doesn't look
+  accidentally inconsistent — see [D-42](DECISIONS.md).

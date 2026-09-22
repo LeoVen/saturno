@@ -854,4 +854,48 @@ Template for a new entry:
   manifest-recording callback — no change to that epic's own shipped
   behavior or checkpoint.
 
+## D-42 — New epic INTERLUDE-2: Profiles (multi-Profile support), reconciling TR-6
+
+- **Date**: 2026-09-22
+- **Type**: New scope (not traceable to a frozen FR/TR); a naming
+  exception; a clarification of TR-6.
+- **Spec refs**: TR-6 ("data is scoped to a single browser profile on a
+  single machine... no automatic sync between browsers, profiles, or
+  devices").
+- **What changes**: the app will support several independent **Profiles**
+  in the same browser — each with its own complete entity configuration
+  and Schedule Versions, switchable from a new always-visible header
+  control, with a name and a color (from a small fixed palette) chosen by
+  the user so the active one is obvious at a glance. A Profile can be
+  created blank or duplicated from an existing one. TR-6's "single browser
+  profile" language predates this and meant something different by
+  "profile" (the browser's own profile concept, i.e. "no sync between
+  Chrome profiles/devices") — that constraint is unaffected and still
+  true; it just now applies per-Saturno-Profile rather than to one
+  implicit dataset. Read TR-6 going forward as: data is scoped to a single
+  browser profile on a single machine, *and*, within that, to whichever
+  Saturno Profile is currently active — moving data between *machines*
+  still only happens via the export/import file (TR-7), now scoped to the
+  active Profile (see the open question on this in
+  [INTERLUDE-2](../epics/INTERLUDE-2-profiles.md)'s Notes).
+- **Why**: user's own words — they manage a school's teachers/subjects/
+  timetables that "change completely" year to year (e.g. 2026 vs. 2027),
+  and want to keep past years around, copy one forward as next year's
+  starting point, and switch between them without either data getting
+  mixed up or a "which one am I looking at" mistake — hence the explicit
+  ask for a persistent, color-coded header control, not just a settings
+  toggle.
+- **Naming exception**: this is new user/system-visible capability, not a
+  UI-only rework of already-shipped screens — by the rule set for E15
+  (D-41) it would get a real `E<NN>` (next available: E16). Named
+  `INTERLUDE-2` instead because the user asked for it by that exact name.
+  Recorded here, and in [BOARD.md](../BOARD.md)'s sequencing notes, so a
+  future reader doesn't mistake the inconsistency for a mistake.
+- **Affected epics/tasks**: new epic
+  [INTERLUDE-2](../epics/INTERLUDE-2-profiles.md), `new` — no tasks
+  started yet. Once T2 (profile-scoped persistence) lands, it touches the
+  persistence layer (`db.ts`/`persistencePlugin.ts`) underneath every
+  other epic's `entities`/`scheduleVersions` reads and writes, though none
+  of their own code should need to change (see that epic's Notes).
+
 *(entries above are the most recent)*
