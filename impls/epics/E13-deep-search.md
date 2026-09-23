@@ -38,7 +38,7 @@ them by schedule quality, and lets them watch progress and cancel early.
 |---|---|---|
 | E13-T1 | Implement `score(input, schedule) -> ScoreBreakdown` in Rust (FR-15, IMPL.md §4.2) | done |
 | E13-T2 | Implement the Refiner: perturb + re-verify + accept/reject by score, simulated-annealing-style (IMPL.md §5.1) | done |
-| E13-T3 | Worker pool: spawn N Workers (capped, per `navigator.hardwareConcurrency`), each with an independent RNG seed (IMPL.md §5.2) | new |
+| E13-T3 | Worker pool: spawn N Workers (capped, per `navigator.hardwareConcurrency`), each with an independent RNG seed (IMPL.md §5.2) | done |
 | E13-T4 | Progress streaming (`candidatesFoundSoFar`, `bestScoreSoFar`, `elapsedMs`) and cancellation flag, checked at slice boundaries (IMPL.md §5.3) | new |
 | E13-T5 | Deduplication of near-identical candidates before ranking (IMPL.md §5.4) | new |
 | E13-T6 | Coordinator: merge/rank candidates across Workers, hand the ranked list to the UI | new |
@@ -54,9 +54,13 @@ them by schedule quality, and lets them watch progress and cancel early.
   Move/Swap only, Joint Sessions untouched), Candidate-emission rule
   (new-best-only), and cooling schedule (iteration-count-driven for now,
   score-scaled initial temperature).
-- *(Worker pool size cap and deduplication threshold are still open —
-  IMPL.md §10 flags them as needing empirical tuning once real candidates
-  exist. Log the actual choices here once made.)*
+- See [D-52](../DECISIONS.md) — `generateDeep` (the per-Worker unit
+  composing Constructor + Refiner), the pool's size cap (6), per-Worker
+  seeding (`crypto.getRandomValues`), lifecycle (spawned/torn down per
+  run), and why merging/ranking stays out of `deepSearchPool.ts`.
+- *(Deduplication threshold is still open — IMPL.md §10 flags it as
+  needing empirical tuning once real candidates exist. Log the actual
+  choice here once made.)*
 
 ## Notes
 
@@ -107,3 +111,31 @@ them by schedule quality, and lets them watch progress and cancel early.
   placements are provably untouched across every emitted candidate.
   `wasm-pack build` and the full TS `test`/`lint`/`build` all verified
   green after the new dependency.
+- **T3 implemented (2026-09-23)**: `solver/src/lib.rs`'s new `generateDeep`
+  wasm export (Constructor once + Refiner for a fixed iteration count
+  from a seed — see [D-52](../DECISIONS.md)), wired into
+  `solver.worker.ts`'s existing message protocol (a new `generateDeep`
+  request/response pair, same shape as `verify`/`score`), and a new pool
+  coordinator, `app/src/solver/deepSearchPool.ts`
+  (`runDeepSearchPool(input, iterations)`), which spawns
+  `poolSize()`-many independent `solver.worker.ts` Worker instances (each
+  gets its own WASM module instance for free — Workers share no memory),
+  sends each a `generateDeep` request with its own `crypto
+  .getRandomValues`-sourced seed, awaits all of them, and terminates the
+  whole pool before resolving. Returns `candidatesByWorker: Candidate[][]`
+  unmerged/unranked (T5/T6's job) — or the first Worker's
+  `InfeasibilityReport` if the (seed-independent) Constructor phase
+  itself failed.
+  No Vitest-level test added — Worker/WASM-instantiation behavior can't
+  be meaningfully exercised in jsdom, consistent with T1's precedent for
+  the single-Worker coordinator. Instead verified end-to-end (agent-driven,
+  headless Chromium via Playwright): dynamically imported
+  `deepSearchPool.ts` straight from the Vite dev server inside the page
+  and called `runDeepSearchPool` directly. A feasible, slightly slack
+  fixture spawned exactly `poolSize()` (6, this environment's
+  `navigator.hardwareConcurrency`) Workers, each independently found a
+  different number of improving candidates (5–8, confirming genuinely
+  distinct per-Worker random walks) yet all converged on the same true
+  optimum (`total === 0`); a deliberately infeasible fixture (a Teacher
+  unavailable every weekday) returned the correct pt-BR
+  `InfeasibilityReport` message. No console errors in either run.

@@ -133,3 +133,14 @@ export interface ScoreBreakdown {
   subjectDistributionPenalty: number
   total: number
 }
+
+/** IMPL.md §5.1 (E13-T2): one improved state the Refiner found — see `solver/src/refiner.rs`'s `refine` for exactly when one is emitted. */
+export interface Candidate {
+  schedule: Schedule
+  score: ScoreBreakdown
+}
+
+/** IMPL.md §4.3/§5.1/§5.2 (E13-T3): one Worker's whole contribution to a deep-search run — Constructor once, then the Refiner for a fixed iteration count from its own seed. Provisional, not yet time-boxed/streamed (D-19-style — see impls/DECISIONS.md for `generateDeep`'s own entry); `solver/src/lib.rs`'s `generateDeep`. */
+export type GenerateDeepResult =
+  | { status: 'feasible'; candidates: Candidate[] }
+  | { status: 'infeasible'; reason: InfeasibilityReport }

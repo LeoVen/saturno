@@ -4,7 +4,10 @@ mod refiner;
 mod score;
 mod verify;
 
-use model::{GenerateResult, Schedule, ScheduleInput};
+use model::{GenerateResult, InfeasibilityReport, Schedule, ScheduleInput};
+use rand::SeedableRng;
+use rand_chacha::ChaCha8Rng;
+use refiner::Candidate;
 use wasm_bindgen::prelude::*;
 
 /// IMPL.md §4.1: checks a candidate Schedule against every FR-14 hard
@@ -43,6 +46,36 @@ pub fn generate_quick(input: JsValue) -> Result<JsValue, JsValue> {
     let input: ScheduleInput =
         serde_wasm_bindgen::from_value(input).map_err(|e| JsValue::from_str(&e.to_string()))?;
     let result: GenerateResult = constructor::generate_quick(&input);
+    serde_wasm_bindgen::to_value(&result).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// IMPL.md §4.3/§5.1/§5.2 (E13-T3): one Worker's whole contribution to a
+/// deep-search run — the Constructor once, then the Refiner for
+/// `iterations` proposal attempts from `seed` (IMPL.md §5.2: "a distinct
+/// RNG seed" per Worker). Provisional shape, not yet time-boxed/streamed —
+/// see impls/DECISIONS.md, same precedent as `generateQuick`/D-19:
+/// E13-T4 will very likely rework the calling convention into
+/// slice-yielding, elapsed-time-driven messages without needing to change
+/// `refiner::refine` itself.
+#[derive(serde::Serialize)]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum GenerateDeepResult {
+    Feasible { candidates: Vec<Candidate> },
+    Infeasible { reason: InfeasibilityReport },
+}
+
+#[wasm_bindgen(js_name = generateDeep)]
+pub fn generate_deep(input: JsValue, seed: u32, iterations: u32) -> Result<JsValue, JsValue> {
+    let input: ScheduleInput =
+        serde_wasm_bindgen::from_value(input).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let result = match constructor::generate_quick(&input) {
+        GenerateResult::Infeasible { reason } => GenerateDeepResult::Infeasible { reason },
+        GenerateResult::Feasible { schedule } => {
+            let mut rng = ChaCha8Rng::seed_from_u64(u64::from(seed));
+            let candidates = refiner::refine(&input, &schedule, &mut rng, iterations);
+            GenerateDeepResult::Feasible { candidates }
+        }
+    };
     serde_wasm_bindgen::to_value(&result).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 

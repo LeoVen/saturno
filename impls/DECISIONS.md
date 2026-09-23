@@ -1239,4 +1239,59 @@ Template for a new entry:
   pool produces real ranked runs to eyeball, same as D-50's score weights.
 - **Affected epics/tasks**: E13-T2.
 
+## D-52 — `generateDeep` (Worker pool's per-Worker unit) and the pool's own shape
+
+- **Date**: 2026-09-23
+- **Type**: Implementation-only
+- **Spec refs**: IMPL.md §3, §4.3, §5.2, §10
+- **What changes**:
+  - **`generateDeep(input, seed, iterations) -> GenerateDeepResult`**
+    (`solver/src/lib.rs`): a new wasm export composing
+    `constructor::generate_quick` (Constructor) then, if feasible,
+    `refiner::refine` (Refiner) for a fixed `iterations` count from a
+    `u32` seed — the minimal thing a pool Worker can call today. Same
+    precedent as `generateQuick`/D-19: provisional, not the real
+    `generate(input, timeBudgetMs)` IMPL.md §4.3 describes (no time
+    budget, no progress streaming) — E13-T4 will very likely rework the
+    calling convention into slice-yielding messages without needing to
+    change `refiner::refine` or the Constructor. `seed` is `u32` rather
+    than IMPL.md's implicit "RNG seed" (no size specified) — a `u64`
+    would need JS `BigInt` at the wasm-bindgen boundary for no real
+    benefit (~4.3 billion distinct seeds is far more than a ≤8-Worker
+    pool ever needs).
+  - **The pool doesn't run the Constructor once and share it** — every
+    Worker independently re-runs the (cheap, TR-10-scale "a few seconds")
+    Constructor phase too, exactly as IMPL.md §3's architecture diagram
+    shows ("WASM module instance... `generate(...)`" per Worker, not "the
+    coordinator runs Constructor once and distributes it"). Since the
+    Constructor has no randomness, every Worker agrees on the same
+    starting point regardless — this is a deliberate simplicity/uniformity
+    choice (every Worker does the same self-contained job, coordinator
+    stays dumb), not an oversight; it also means an infeasible `input` is
+    reported identically by every Worker, so the pool coordinator
+    (`app/src/solver/deepSearchPool.ts`) just returns the first one it
+    sees rather than reconciling N reports.
+  - **Pool size cap**: 6 (`POOL_SIZE_CAP`), the lower end of IMPL.md §5.2's
+    own "e.g. 6-8" — explicitly flagged there (and here) as a guess
+    needing empirical tuning on real hardware, not a measured number.
+  - **Per-Worker RNG seed**: `crypto.getRandomValues` — genuinely random
+    per real run (not reproducible run-to-run at the app level; that
+    determinism guarantee belongs to `refiner::refine`'s own Rust tests
+    given a fixed seed, D-51).
+  - **Pool lifecycle**: spawned fresh and fully torn down
+    (`Worker.terminate()`) within one `runDeepSearchPool` call — no
+    warm/reused pool across separate deep-search runs. Simplest correct
+    thing for this task; E13-T4 (once progress/cancellation exist) may
+    find a longer-lived pool worth it, but nothing today needs one.
+  - **Merging/ranking stays out of scope here**: `runDeepSearchPool`
+    returns `candidatesByWorker: Candidate[][]`, unmerged and unranked —
+    E13-T5 (dedup) and T6 (the actual "Coordinator: merge/rank... hand the
+    ranked list to the UI") own that, deliberately not duplicated here.
+- **Why**: IMPL.md leaves the pool-size cap, per-Worker seeding mechanism,
+  and pool lifecycle open (§10 names the cap explicitly); the Constructor-
+  redundancy choice and the merge/rank scope boundary follow directly from
+  reading IMPL.md §3's diagram and the epic's own T3/T5/T6 task split
+  literally rather than optimizing or scope-creeping ahead of them.
+- **Affected epics/tasks**: E13-T3.
+
 *(entries above are the most recent)*

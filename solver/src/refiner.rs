@@ -12,12 +12,11 @@
 //! testable via an explicit seeded RNG (also what IMPL.md §5.2 needs
 //! per-Worker anyway).
 //!
-//! `refine`/`Candidate` aren't called from `lib.rs` yet — E13-T3/T4/T6
-//! assemble the actual exported `generate` around this and the Constructor
-//! together — so this module is `#[allow(dead_code)]` for now rather than
-//! genuinely unused code; every item here is exercised by this module's own
-//! tests.
-#![allow(dead_code)]
+//! Called from `lib.rs`'s `generateDeep` export (E13-T3) — a provisional,
+//! not-yet-time-boxed composition of the Constructor + this Refiner (see
+//! D-19's precedent for `generateQuick`, and impls/DECISIONS.md for
+//! `generateDeep`'s own entry); E13-T4 will very likely rework the calling
+//! shape into slice-yielding calls without changing this module itself.
 
 use crate::model::{Index, PlacedPeriod, Schedule, ScheduleInput, WEEKDAYS, Weekday};
 use crate::score::{ScoreBreakdown, score};
