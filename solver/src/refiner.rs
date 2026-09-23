@@ -264,6 +264,7 @@ mod tests {
     use super::*;
     use crate::model::{
         Assignment, Class, Grade, JointSessionPlacement, Segment, Subject, Teacher, TimeSlot,
+        UnavailabilityRange, Violation,
     };
 
     fn time_slot(id: &str, start: &str, end: &str) -> TimeSlot {
@@ -583,6 +584,132 @@ mod tests {
             assert_eq!(jp.joint_session_id, joint.joint_session_id);
             assert_eq!(jp.weekday, joint.weekday);
             assert_eq!(jp.time_slot_id, joint.time_slot_id);
+        }
+    }
+
+    /// E13-T8: `propose_move` only ever checks the *moving* Class's own
+    /// occupied slots (see its own doc comment) — it has no idea whether a
+    /// candidate target slot is already taken by a *different* Class's
+    /// placement with the same Teacher. Two Classes sharing one Teacher,
+    /// initially placed at different Time Slots on the same weekdays, is a
+    /// real opportunity for the Refiner to propose moving one Class's
+    /// placement onto a slot the shared Teacher is already busy at via the
+    /// *other* Class — only `verify()`'s standalone `TeacherDoubleBooked`
+    /// check protects against ever emitting that as a Candidate.
+    #[test]
+    fn never_double_books_a_shared_teacher_across_classes_during_refinement() {
+        let input = ScheduleInput {
+            segments: vec![segment("seg1", 6)],
+            grades: vec![grade("g1", "seg1")],
+            classes: vec![class("c1", "g1"), class("c2", "g1")],
+            subjects: vec![subject("math")],
+            teachers: vec![teacher("t1")],
+            assignments: vec![
+                assignment("a1", "c1", "math", &["t1"], 3),
+                assignment("a2", "c2", "math", &["t1"], 3),
+            ],
+            joint_sessions: Vec::new(),
+        };
+        let initial = Schedule {
+            placements: vec![
+                placement("c1", "math", "t1", Weekday::Mon, "seg1-slot-0"),
+                placement("c1", "math", "t1", Weekday::Tue, "seg1-slot-0"),
+                placement("c1", "math", "t1", Weekday::Wed, "seg1-slot-0"),
+                placement("c2", "math", "t1", Weekday::Mon, "seg1-slot-1"),
+                placement("c2", "math", "t1", Weekday::Tue, "seg1-slot-1"),
+                placement("c2", "math", "t1", Weekday::Wed, "seg1-slot-1"),
+            ],
+            joint_session_placements: Vec::new(),
+        };
+        assert!(
+            verify(&input, &initial).is_empty(),
+            "fixture must start feasible"
+        );
+
+        let mut session = RefineSession::new(input.clone(), initial, 11, 300.0);
+        let mut elapsed = 0.0;
+        let mut slices = 0;
+        loop {
+            let outcome = session.run_slice(elapsed, 30);
+            for c in &outcome.new_candidates {
+                let violations = verify(&input, &c.schedule);
+                assert!(
+                    violations
+                        .iter()
+                        .all(|v| !matches!(v, Violation::TeacherDoubleBooked { .. })),
+                    "a shared Teacher was double-booked across Classes: {violations:?}"
+                );
+            }
+            if outcome.done {
+                break;
+            }
+            elapsed += 20.0;
+            slices += 1;
+            assert!(slices < 1000, "test fixture never reached `done`");
+        }
+    }
+
+    /// E13-T8: `propose_move` picks any of the moving Class's own free
+    /// slots without any idea whether the Teacher is actually available
+    /// there (see its own doc comment: it only tracks *this Class's*
+    /// occupancy) — a Teacher available on a single weekday only is a real
+    /// opportunity for the Refiner to propose moving a placement onto a
+    /// day that Teacher can't work; only `verify()`'s standalone
+    /// `TeacherUnavailable` check protects against ever emitting that.
+    #[test]
+    fn never_schedules_outside_a_teachers_availability_during_refinement() {
+        let mut restricted = teacher("t1");
+        restricted.unavailability = [Weekday::Tue, Weekday::Wed, Weekday::Thu, Weekday::Fri]
+            .iter()
+            .map(|&weekday| UnavailabilityRange {
+                id: format!("u-{weekday:?}"),
+                weekday,
+                start: "00:00".to_string(),
+                end: "23:59".to_string(),
+            })
+            .collect();
+
+        let input = ScheduleInput {
+            segments: vec![segment("seg1", 6)],
+            grades: vec![grade("g1", "seg1")],
+            classes: vec![class("c1", "g1")],
+            subjects: vec![subject("math")],
+            teachers: vec![restricted],
+            assignments: vec![assignment("a1", "c1", "math", &["t1"], 2)],
+            joint_sessions: Vec::new(),
+        };
+        let initial = Schedule {
+            placements: vec![
+                placement("c1", "math", "t1", Weekday::Mon, "seg1-slot-0"),
+                placement("c1", "math", "t1", Weekday::Mon, "seg1-slot-1"),
+            ],
+            joint_session_placements: Vec::new(),
+        };
+        assert!(
+            verify(&input, &initial).is_empty(),
+            "fixture must start feasible"
+        );
+
+        let mut session = RefineSession::new(input.clone(), initial, 5, 300.0);
+        let mut elapsed = 0.0;
+        let mut slices = 0;
+        loop {
+            let outcome = session.run_slice(elapsed, 30);
+            for c in &outcome.new_candidates {
+                for p in &c.schedule.placements {
+                    assert_eq!(
+                        p.weekday,
+                        Weekday::Mon,
+                        "Teacher placed outside their only available weekday"
+                    );
+                }
+            }
+            if outcome.done {
+                break;
+            }
+            elapsed += 20.0;
+            slices += 1;
+            assert!(slices < 1000, "test fixture never reached `done`");
         }
     }
 }

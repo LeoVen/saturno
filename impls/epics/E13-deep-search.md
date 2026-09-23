@@ -43,7 +43,7 @@ them by schedule quality, and lets them watch progress and cancel early.
 | E13-T5 | Deduplication of near-identical candidates before ranking (IMPL.md §5.4) | done |
 | E13-T6 | Coordinator: merge/rank candidates across Workers, hand the ranked list to the UI | done |
 | E13-T7 | UI: time-budget input, live progress display, cancel button, ranked candidate list, "adopt as version" action wired to E07 (FR-32–34) | done |
-| E13-T8 | Unit tests for `score` and the Refiner's hard-constraint preservation (TR-11) | new |
+| E13-T8 | Unit tests for `score` and the Refiner's hard-constraint preservation (TR-11) | in-review |
 
 ## Decisions
 
@@ -266,3 +266,32 @@ them by schedule quality, and lets them watch progress and cancel early.
   verification, not the epic's own Human Verification steps below —
   those still need a person to walk them (once E13-T8 closes out the
   epic's remaining task).
+- **T8 (2026-09-23)**: `score` (T1) and most of the Refiner's hard-
+  constraint preservation were already covered by tests written
+  alongside T1/T2/T4's own work (e.g. `every_candidate_is_feasible_and_
+  strictly_improves_on_the_one_before_it`, `joint_session_placements_
+  are_never_touched`). Rather than treat that as satisfying this task by
+  default, added two more `refiner.rs` tests specifically targeting
+  hard-constraint risks `propose_move` doesn't structurally prevent on
+  its own (it only ever checks the *moving* Class's own occupied slots —
+  see its own doc comment) and that the earlier, mostly single-Class
+  fixtures never actually exercised:
+  `never_double_books_a_shared_teacher_across_classes_during_refinement`
+  (two Classes sharing one Teacher, initially placed at different Time
+  Slots on the same weekdays — a real opportunity for the Refiner to
+  propose moving one Class's placement onto a slot the shared Teacher is
+  already busy at via the *other* Class) and
+  `never_schedules_outside_a_teachers_availability_during_refinement`
+  (a Teacher available only one weekday — `propose_move` has no notion
+  of availability at all, so only `verify()`'s standalone
+  `TeacherUnavailable` check protects this). Both run the real
+  `RefineSession` slice loop for hundreds of proposal attempts and
+  inspect every emitted Candidate directly for the specific violation
+  each scenario is designed to risk, rather than only the generic
+  "`verify()` is empty" check already done elsewhere.
+  37 Rust tests total (`cargo test`/`fmt --check`/`clippy -D warnings`
+  all clean); `wasm-pack build` and full TS `test`/`lint`/`build` still
+  green (untouched by this task, re-verified anyway). This is the
+  epic's last task — per `impls/PROCESS.md` §4, it stays `in-review`
+  (not `done`) until a person walks E13's own Human Verification steps
+  below; the epic itself stays `in-progress` until then.
