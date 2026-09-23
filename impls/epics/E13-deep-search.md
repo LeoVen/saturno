@@ -41,7 +41,7 @@ them by schedule quality, and lets them watch progress and cancel early.
 | E13-T3 | Worker pool: spawn N Workers (capped, per `navigator.hardwareConcurrency`), each with an independent RNG seed (IMPL.md §5.2) | done |
 | E13-T4 | Progress streaming (`candidatesFoundSoFar`, `bestScoreSoFar`, `elapsedMs`) and cancellation flag, checked at slice boundaries (IMPL.md §5.3) | done |
 | E13-T5 | Deduplication of near-identical candidates before ranking (IMPL.md §5.4) | done |
-| E13-T6 | Coordinator: merge/rank candidates across Workers, hand the ranked list to the UI | new |
+| E13-T6 | Coordinator: merge/rank candidates across Workers, hand the ranked list to the UI | done |
 | E13-T7 | UI: time-budget input, live progress display, cancel button, ranked candidate list, "adopt as version" action wired to E07 (FR-32–34) | new |
 | E13-T8 | Unit tests for `score` and the Refiner's hard-constraint preservation (TR-11) | new |
 
@@ -193,3 +193,28 @@ them by schedule quality, and lets them watch progress and cancel early.
   is never used as a comparison anchor for a later candidate (only the
   surviving *kept* set is). Full suite (202 tests), lint, and build all
   green.
+- **T6 implemented (2026-09-23)**: `app/src/solver/deepSearchCoordinator.ts`
+  — `startDeepSearch(input, timeBudgetMs, onProgress)` is now the one
+  entry point E13-T7's UI will call; it wraps `deepSearchPool.ts`'s
+  `startDeepSearchPool` (T3/T4, unchanged — progress streaming and
+  `cancel()` pass through as-is, since FR-34 only needs a live count/best-
+  score while running, not the ranked list mid-run) and, once every
+  Worker's session is `done`, turns the raw per-Worker
+  `candidatesByWorker: Candidate[][]` into FR-32's actual promise — a
+  single merged, deduplicated (T5), score-ascending-ranked list — via a
+  pure, separately-exported `rankCandidates` function. `deepSearchPool.ts`
+  itself is now an internal implementation detail; nothing outside this
+  module needs to import it directly going forward.
+  4 new unit tests for `rankCandidates` (directly testable, no Worker
+  involved) — the one worth calling out specifically dedupes two
+  candidates that came from *different* Workers, confirming dedup runs on
+  the whole merged pool, not per-Worker (a naive per-Worker dedup would
+  miss this, since two Workers independently converging on
+  near-identical schedules is exactly the case §5.4 exists for). Full
+  suite (206 tests), lint, build all green. Verified end-to-end
+  (headless Chromium): a 1200ms real run through `startDeepSearch`
+  streamed 90 progress events and resolved 28 ranked, deduplicated
+  candidates with strictly ascending `score.total` — including several
+  genuinely different (not near-duplicate) schedules tied at the true
+  optimum (0), which is real diversity FR-32 wants surfaced, not a dedup
+  gap. No console errors.
