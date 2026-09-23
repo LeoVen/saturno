@@ -2,12 +2,12 @@ import type { PiniaPluginContext } from 'pinia'
 import { readStoreState, writeStoreState } from './db'
 
 /**
- * IMPL.md §7: the generation-run store is explicitly ephemeral state (an
- * in-progress `generate` run's progress/result) — it must never be
- * hydrated from or written to IndexedDB, unlike the entities/schedule
- * -versions stores this plugin otherwise applies to uniformly.
+ * IMPL.md §7: the generation-run stores are explicitly ephemeral state (an
+ * in-progress `generate`/Deep Search run's progress/result) — they must
+ * never be hydrated from or written to IndexedDB, unlike the entities/
+ * schedule-versions stores this plugin otherwise applies to uniformly.
  */
-const EPHEMERAL_STORE_IDS = new Set(['generation'])
+const EPHEMERAL_STORE_IDS = new Set(['generation', 'deepSearch'])
 
 /**
  * INTERLUDE-2 (D-42): these three are persisted, but not through this

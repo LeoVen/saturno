@@ -1408,4 +1408,35 @@ Template for a new entry:
   against real school data yet.
 - **Affected epics/tasks**: E13-T5.
 
+## D-55 — Deep Search UI: per-row adopt (no bulk/all-or-nothing step), shared FR-13 gate messages
+
+- **Date**: 2026-09-23
+- **Type**: Clarification
+- **Spec refs**: FR-13, FR-33, GL.md
+- **What changes**:
+  - **"Busca Aprofundada"** (`DeepSearchView.vue`) is GL.md's own already-
+    fixed pt-BR term for Deep Search — not a new naming choice, just
+    confirming the UI uses it verbatim as the sidebar label/heading.
+  - **FR-33** ("select any one... to adopt... Candidates not selected are
+    discarded... unless the user explicitly chooses to keep more than
+    one") doesn't specify a concrete UI mechanism. Implemented as: every
+    row in the ranked candidate table gets its own independent "Adotar
+    como versão" button (a native `prompt()` for the new Schedule
+    Version's name — the same one-off-text-entry pattern INTERLUDE-2's
+    "Duplicar" already established, not a new modal/form). There's no
+    bulk "keep these N" step — a user satisfies "more than one" simply by
+    clicking Adotar on as many rows as they want; nothing about the
+    unclicked rows is special-cased as "discarded" beyond the list itself
+    being ephemeral (never persisted) once the user navigates away.
+  - **FR-13's pre-generation gate** (`entities.overloadedClasses`/
+    `zeroOverlapAssignments`, with their pt-BR warning messages) is now
+    shared between `GenerateView.vue` (E06) and `DeepSearchView.vue`
+    (E13-T7) via a new `entities/validationMessages.ts`, rather than a
+    second verbatim copy of the same message-formatting functions — both
+    screens gate on literally the same checks, so a future wording change
+    only needs to happen once.
+- **Why**: FR-33's UI mechanism and whether to share E06/E13's identical
+  validation-gate code were both left to implementation judgment.
+- **Affected epics/tasks**: E13-T7.
+
 *(entries above are the most recent)*

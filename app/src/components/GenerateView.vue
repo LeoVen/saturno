@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useEntitiesStore } from '../stores/entities'
 import { useGenerationStore } from '../stores/generation'
 import { useScheduleVersionsStore } from '../stores/scheduleVersions'
+import { overloadMessage, zeroOverlapMessage } from '../entities/validationMessages'
 import ScheduleGrid from './ScheduleGrid.vue'
 
 // E06: the first screen where Saturno actually produces a schedule
@@ -13,24 +14,6 @@ import ScheduleGrid from './ScheduleGrid.vue'
 const entities = useEntitiesStore()
 const generation = useGenerationStore()
 const scheduleVersions = useScheduleVersionsStore()
-
-function classLabel(classId: string): string {
-  const schoolClass = entities.classById(classId)
-  if (!schoolClass) return '?'
-  const grade = entities.gradeById(schoolClass.gradeId)
-  const segment = grade ? entities.segmentById(grade.segmentId) : undefined
-  return [segment?.name, grade?.name, schoolClass.name].filter(Boolean).join(' / ')
-}
-
-function overloadMessage(classId: string, requiredWeekly: number, availableWeekly: number): string {
-  return `${classLabel(classId)}: requer ${requiredWeekly} aula(s) por semana, mas o segmento só oferece ${availableWeekly} período(s) não vagos por semana.`
-}
-
-function zeroOverlapMessage(assignmentId: string, teacherId: string, classId: string): string {
-  const subjectId = entities.assignmentById(assignmentId)?.subjectId
-  const subjectLabel = subjectId ? entities.subjectById(subjectId)?.name : undefined
-  return `${entities.teacherLabel(teacherId)}: nenhum horário disponível compatível com ${classLabel(classId)}${subjectLabel ? ` para a disciplina ${subjectLabel}` : ''}.`
-}
 
 // FR-13 pre-generation gate: the same structural checks E05 already
 // surfaces on the Assignments screen also block "Gerar" here — a bad
@@ -67,7 +50,7 @@ function saveAsVersion(): void {
         class="alert alert-danger"
         role="alert"
       >
-        {{ overloadMessage(w.classId, w.requiredWeekly, w.availableWeekly) }}
+        {{ overloadMessage(entities, w.classId, w.requiredWeekly, w.availableWeekly) }}
       </li>
       <li
         v-for="w in entities.zeroOverlapAssignments"
@@ -75,7 +58,7 @@ function saveAsVersion(): void {
         class="alert alert-danger"
         role="alert"
       >
-        {{ zeroOverlapMessage(w.assignmentId, w.teacherId, w.classId) }}
+        {{ zeroOverlapMessage(entities, w.assignmentId, w.teacherId, w.classId) }}
       </li>
     </ul>
   </div>

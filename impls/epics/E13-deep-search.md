@@ -42,7 +42,7 @@ them by schedule quality, and lets them watch progress and cancel early.
 | E13-T4 | Progress streaming (`candidatesFoundSoFar`, `bestScoreSoFar`, `elapsedMs`) and cancellation flag, checked at slice boundaries (IMPL.md §5.3) | done |
 | E13-T5 | Deduplication of near-identical candidates before ranking (IMPL.md §5.4) | done |
 | E13-T6 | Coordinator: merge/rank candidates across Workers, hand the ranked list to the UI | done |
-| E13-T7 | UI: time-budget input, live progress display, cancel button, ranked candidate list, "adopt as version" action wired to E07 (FR-32–34) | new |
+| E13-T7 | UI: time-budget input, live progress display, cancel button, ranked candidate list, "adopt as version" action wired to E07 (FR-32–34) | done |
 | E13-T8 | Unit tests for `score` and the Refiner's hard-constraint preservation (TR-11) | new |
 
 ## Decisions
@@ -66,6 +66,9 @@ them by schedule quality, and lets them watch progress and cancel early.
   added).
 - See [D-54](../DECISIONS.md) — dedup's distance metric (fractional
   Hamming distance over the assignment grid) and default threshold (5%).
+- See [D-55](../DECISIONS.md) — the UI's per-row "adopt" mechanism for
+  FR-33 (no bulk/all-or-nothing step) and sharing FR-13's gate messages
+  with `GenerateView.vue`.
 
 ## Notes
 
@@ -218,3 +221,48 @@ them by schedule quality, and lets them watch progress and cancel early.
   genuinely different (not near-duplicate) schedules tied at the true
   optimum (0), which is real diversity FR-32 wants surfaced, not a dedup
   gap. No console errors.
+- **T7 implemented (2026-09-23)**: `app/src/components/DeepSearchView.vue`
+  ("Busca Aprofundada" — GL.md's own term, added to `App.vue`'s sidebar
+  right after "Gerar Horário"), backed by a new ephemeral
+  `stores/deepSearch.ts` (registered in `persistencePlugin.ts`'s
+  `EPHEMERAL_STORE_IDS`, same as `generation`) that calls
+  `deepSearchCoordinator.ts`'s `startDeepSearch` and exposes `status`/
+  `elapsedMs`/`bestTotal`/`candidatesFound`/`candidates` reactively; the
+  live `DeepSearchHandle` itself is kept as a module-scoped variable, not
+  Pinia state (a live handle isn't data to render or persist). FR-13's
+  pre-generation gate, a time-budget-in-minutes input, a live progress
+  line while running, a cancel button, and — once done — the ranked
+  candidate table (rank, `score.total`/`teacherGapPenalty`/
+  `subjectDistributionPenalty`, "Visualizar" to preview via `ScheduleGrid`,
+  "Adotar como versão" per row) — see [D-55](../DECISIONS.md) for the
+  FR-33 per-row-adopt mechanism and the new shared
+  `entities/validationMessages.ts` (also adopted by `GenerateView.vue`,
+  removing its own duplicate copy of the same FR-13 message functions).
+  Caught and fixed one real bug before verifying: the time-budget input
+  handler did `Math.max(1, timeBudgetMinutes.value)`, which evaluates to
+  `NaN` (not `1`) when the field is empty/cleared, silently sending an
+  invalid time budget into the solver — replaced with an explicit
+  `Number.isFinite` guard.
+  No new Vitest tests — this task is Vue components/stores wiring
+  existing, already-tested logic (`deepSearchCoordinator.ts`,
+  `candidateDedup.ts`, `RefineSession`) together; the meaningful risk
+  here is in the wiring itself, which isn't something a component test
+  would exercise better than driving the real thing. Verified end-to-end
+  instead (agent-driven, headless Chromium via Playwright, real UI
+  interactions — not a script calling the coordinator directly like
+  T3/T4/T6's checks): imported a small fixture, confirmed the FR-13 gate
+  shows nothing for a valid config, started a real 3-second run, watched
+  the live progress line update ("Xs decorridos · N candidato(s)
+  encontrado(s) · melhor pontuação..."), confirmed the button correctly
+  flips to "Cancelar Busca" while running and back once done, saw the
+  ranked table render with strictly ascending scores, clicked
+  "Visualizar" on the top candidate (which correctly needs a Class picked
+  from `ScheduleGrid`'s own "Ver turma" dropdown before it renders —
+  not a bug, `ScheduleGrid` has always worked this way) and confirmed a
+  real grid with real placements appeared, then clicked "Adotar como
+  versão", answered the native name prompt, and confirmed the new
+  Schedule Version actually appears in "Versões" — the full FR-32/33/34
+  loop, working. No console errors throughout. This is agent-driven
+  verification, not the epic's own Human Verification steps below —
+  those still need a person to walk them (once E13-T8 closes out the
+  epic's remaining task).

@@ -11,6 +11,10 @@ import { startDeepSearchPool } from './deepSearchPool'
 import type { DeepSearchProgress, PoolRunResult } from './deepSearchPool'
 import type { Candidate, InfeasibilityReport, ScheduleInput } from '../wasm/types'
 
+// Re-exported so a caller (E13-T7's store) only ever needs to import from
+// this module, not reach into `deepSearchPool.ts` directly.
+export type { DeepSearchProgress } from './deepSearchPool'
+
 export type DeepSearchResult =
   | { status: 'infeasible'; reason: InfeasibilityReport }
   | { status: 'feasible'; candidates: Candidate[] }

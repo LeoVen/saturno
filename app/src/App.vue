@@ -9,6 +9,7 @@ import TeachersConfig from './components/TeachersConfig.vue'
 import AssignmentsConfig from './components/AssignmentsConfig.vue'
 import JointSessionsConfig from './components/JointSessionsConfig.vue'
 import GenerateView from './components/GenerateView.vue'
+import DeepSearchView from './components/DeepSearchView.vue'
 import ScheduleVersionsView from './components/ScheduleVersionsView.vue'
 import AdjustScheduleView from './components/AdjustScheduleView.vue'
 import ViewSchedule from './components/ViewSchedule.vue'
@@ -29,6 +30,7 @@ const SECTIONS: SidebarSection[] = [
   { key: 'assignments', label: 'Atribuições' },
   { key: 'jointSessions', label: 'Sessões Conjuntas' },
   { key: 'generate', label: 'Gerar Horário' },
+  { key: 'deepSearch', label: 'Busca Aprofundada' },
   { key: 'versions', label: 'Versões' },
   { key: 'adjust', label: 'Ajustar Horário' },
   { key: 'view', label: 'Visualizar Horário' },
@@ -65,6 +67,7 @@ const profileColorVars = computed(() => {
         <AssignmentsConfig v-else-if="activeSection === 'assignments'" />
         <JointSessionsConfig v-else-if="activeSection === 'jointSessions'" />
         <GenerateView v-else-if="activeSection === 'generate'" />
+        <DeepSearchView v-else-if="activeSection === 'deepSearch'" />
         <ScheduleVersionsView v-else-if="activeSection === 'versions'" />
         <AdjustScheduleView v-else-if="activeSection === 'adjust'" />
         <ViewSchedule v-else-if="activeSection === 'view'" />
