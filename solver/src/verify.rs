@@ -11,18 +11,21 @@ use std::collections::HashMap;
 
 /// A placement with its Class-relative period position and real clock time
 /// resolved — owned (not borrowed) to keep the checks below free of
-/// lifetime bookkeeping at this data scale (TR-10).
-struct Resolved {
-    class_id: String,
-    subject_id: String,
-    teacher_id: String,
-    weekday: Weekday,
-    slot_index: usize,
-    start: String,
-    end: String,
+/// lifetime bookkeeping at this data scale (TR-10). `pub(crate)`: reused by
+/// `score.rs` (E13-T1) so the teacher-gap penalty resolves real clock times
+/// the same way `verify`'s own double-booking checks do, rather than a
+/// second, possibly-diverging resolution.
+pub(crate) struct Resolved {
+    pub(crate) class_id: String,
+    pub(crate) subject_id: String,
+    pub(crate) teacher_id: String,
+    pub(crate) weekday: Weekday,
+    pub(crate) slot_index: usize,
+    pub(crate) start: String,
+    pub(crate) end: String,
 }
 
-fn resolve(idx: &Index, schedule: &Schedule) -> Vec<Resolved> {
+pub(crate) fn resolve(idx: &Index, schedule: &Schedule) -> Vec<Resolved> {
     schedule
         .placements
         .iter()

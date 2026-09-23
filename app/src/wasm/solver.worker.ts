@@ -2,18 +2,22 @@
 
 // TR-3: the solver runs inside a single dedicated Web Worker, off the main
 // thread. E06 wires the quick-generation path (IMPL.md §5.5) — the Worker
-// pool for deep mode (IMPL.md §5.2) arrives with E13.
+// pool for deep mode (IMPL.md §5.2) arrives with E13. E13-T1 adds `score`
+// here too (standalone, not just internal to the eventual Refiner) — still
+// through this single Worker; the pool itself is a separate module (E13-T3).
 
-import init, { generateQuick, verify } from './pkg/solver.js'
-import type { GenerateResult, Schedule, ScheduleInput, Violation } from './types'
+import init, { generateQuick, score, verify } from './pkg/solver.js'
+import type { GenerateResult, Schedule, ScheduleInput, ScoreBreakdown, Violation } from './types'
 
 export type SolverWorkerRequest =
   | { type: 'generateQuick'; requestId: number; input: ScheduleInput }
   | { type: 'verify'; requestId: number; input: ScheduleInput; schedule: Schedule }
+  | { type: 'score'; requestId: number; input: ScheduleInput; schedule: Schedule }
 
 export type SolverWorkerResponse =
   | { type: 'generateQuick'; requestId: number; result: GenerateResult }
   | { type: 'verify'; requestId: number; violations: Violation[] }
+  | { type: 'score'; requestId: number; breakdown: ScoreBreakdown }
   | { type: 'error'; requestId: number; message: string }
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope
@@ -44,6 +48,14 @@ ctx.onmessage = async (event: MessageEvent<SolverWorkerRequest>) => {
         type: 'verify',
         requestId: message.requestId,
         violations,
+      }
+      ctx.postMessage(response)
+    } else if (message.type === 'score') {
+      const breakdown = score(message.input, message.schedule) as ScoreBreakdown
+      const response: SolverWorkerResponse = {
+        type: 'score',
+        requestId: message.requestId,
+        breakdown,
       }
       ctx.postMessage(response)
     }

@@ -1,6 +1,6 @@
 # E13 — Deep Search
 
-**Status**: new
+**Status**: in-progress
 
 ## Goal
 
@@ -36,7 +36,7 @@ them by schedule quality, and lets them watch progress and cancel early.
 
 | ID | Task | Status |
 |---|---|---|
-| E13-T1 | Implement `score(input, schedule) -> ScoreBreakdown` in Rust (FR-15, IMPL.md §4.2) | new |
+| E13-T1 | Implement `score(input, schedule) -> ScoreBreakdown` in Rust (FR-15, IMPL.md §4.2) | done |
 | E13-T2 | Implement the Refiner: perturb + re-verify + accept/reject by score, simulated-annealing-style (IMPL.md §5.1) | new |
 | E13-T3 | Worker pool: spawn N Workers (capped, per `navigator.hardwareConcurrency`), each with an independent RNG seed (IMPL.md §5.2) | new |
 | E13-T4 | Progress streaming (`candidatesFoundSoFar`, `bestScoreSoFar`, `elapsedMs`) and cancellation flag, checked at slice boundaries (IMPL.md §5.3) | new |
@@ -47,8 +47,33 @@ them by schedule quality, and lets them watch progress and cancel early.
 
 ## Decisions
 
-*(none yet — but see IMPL.md §10 for open implementation questions: Refiner acceptance strategy, Worker pool size cap, and deduplication threshold are all flagged there as needing empirical tuning once real candidates exist. Log the actual choices here once made.)*
+- See [D-50](../DECISIONS.md) — `score`'s two FR-15 metrics (teacher-gap
+  minutes, per-(Class,Subject) daily-count variance) and their weights
+  into `total`, all lower-is-better.
+- *(Refiner acceptance strategy, Worker pool size cap, and deduplication
+  threshold are still open — IMPL.md §10 flags them as needing empirical
+  tuning once real candidates exist. Log the actual choices here once
+  made.)*
 
 ## Notes
 
-*(none)*
+- **T1 implemented (2026-09-23)**: `solver/src/score.rs`, exported as
+  `score(input, schedule)` alongside `verify`/`generateQuick` in `lib.rs`
+  (`#[wasm_bindgen]`), wired through `solver.worker.ts`'s message
+  protocol and a new `scoreSchedule()` in `generationCoordinator.ts`,
+  mirroring `verifySchedule`'s existing shape exactly (same single
+  Worker — the pool itself is T3). Reuses `verify.rs`'s private
+  `resolve`/`Resolved` (now `pub(crate)`) rather than re-deriving
+  real-clock-time resolution a second time. 8 new Rust unit tests
+  (`cargo test`, `cargo fmt --check`, `cargo clippy -D warnings` all
+  clean) cover: no gap on a single- or back-to-back-period day, an exact
+  idle-minutes count for one gap, gaps resolved correctly across two
+  Segments with different grids in the same day (D-01-style), zero
+  distribution penalty for a perfectly even spread, a concentrated
+  spread scoring strictly worse than an even one, `total` matching the
+  weighted sum, and a not-yet-placed Assignment contributing nothing
+  (must not panic mid-Refiner-search on a partial candidate). TS side:
+  full `npm run test`/`lint`/`vue-tsc -b` build all green; no TS-level
+  test added for the coordinator/worker plumbing itself (thin pass-
+  through, same as `verifySchedule`'s own precedent — no existing test
+  file for that either).

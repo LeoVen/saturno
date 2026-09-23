@@ -43,7 +43,7 @@ each one — called out once here instead of repeated 14 times:
 | E10 | Joint Sessions | done | Shared multi-class session schedules correctly, shown distinctly | [epics/E10-joint-sessions.md](epics/E10-joint-sessions.md) |
 | E11 | Native Data Portability | done | Export full state, import on a fresh profile, restored | [epics/E11-native-data-portability.md](epics/E11-native-data-portability.md) |
 | E12 | Human-Readable Export | done | Print view and .xlsx match the school's grid format | [epics/E12-human-readable-export.md](epics/E12-human-readable-export.md) |
-| E13 | Deep Search | new | Time-boxed run, live progress, cancel, ranked candidates to choose from | [epics/E13-deep-search.md](epics/E13-deep-search.md) |
+| E13 | Deep Search | in-progress | Time-boxed run, live progress, cancel, ranked candidates to choose from | [epics/E13-deep-search.md](epics/E13-deep-search.md) |
 | E14 | Teacher Absence & Repair | new | Mark absence → repair fills/reports vacated slots | [epics/E14-teacher-absence-repair.md](epics/E14-teacher-absence-repair.md) |
 | E15 | Excel Round-Trip Import | done | Export "Por Turma" .xlsx, reimport unmodified → new version restored | [epics/E15-excel-round-trip.md](epics/E15-excel-round-trip.md) |
 | INTERLUDE-2 | Profiles (Multi-Project Support) | done | Create/duplicate/switch Profiles from a header dropdown, each fully independent and color-coded | [epics/INTERLUDE-2-profiles.md](epics/INTERLUDE-2-profiles.md) |

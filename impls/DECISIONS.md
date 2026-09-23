@@ -1140,4 +1140,43 @@ Template for a new entry:
   around gaps.
 - **Affected epics/tasks**: E12-T4.
 
+## D-50 — `score`'s FR-15 metrics: gap-minutes and per-(Class,Subject) daily-count variance, lower-is-better
+
+- **Date**: 2026-09-23
+- **Type**: Implementation-only
+- **Spec refs**: FR-15, TR-9, IMPL.md §4.2, §10
+- **What changes**: IMPL.md §4.2 names `score`'s return shape as "a
+  breakdown, not just one number" with example fields
+  (`teacherGapScore`, `subjectDistributionScore`, `total`) but leaves the
+  actual formula, units, and higher/lower-is-better direction open — §10
+  explicitly flags Scorer weights as unresolved, "assumes fixed sensible
+  defaults for MVP." Implemented as (`solver/src/score.rs`):
+  - `teacherGapPenalty`: summed idle minutes across every Teacher's day —
+    real-clock-time span from that day's first placement's start to its
+    last placement's end, minus the minutes actually occupied, summed
+    over every (Teacher, weekday). Resolved via `verify.rs`'s own
+    `resolve`/`Resolved` (now `pub(crate)`) so gaps use the exact same
+    cross-Segment real-clock-time resolution as the existing
+    double-booking checks (D-01), not a second, possibly-diverging
+    implementation.
+  - `subjectDistributionPenalty`: for every (Class, Subject) with an
+    Assignment, the population variance of its placements' per-weekday
+    counts against a perfectly even spread, summed across every
+    (Class, Subject). Zero when a Subject's occurrences are spread as
+    evenly as its own weekly count allows.
+  - `total = teacherGapPenalty * 1.0 + subjectDistributionPenalty * 10.0`
+    — TR-9 frames soft objectives as "weighted penalties," so the
+    convention here is **lower is better** throughout (including
+    `total`), not the "higher is better" a bare word "score" might
+    suggest. The 10x weight on distribution is a magnitude-matching
+    choice (a real week produces low-hundreds of gap-minutes but only a
+    handful of variance points), not a statement that even distribution
+    matters 10x more than minimizing gaps — reasoned about, not measured
+    against real school preference, so it may need revisiting once E13's
+    Refiner (T2) produces real ranked candidates to eyeball.
+- **Why**: a concrete, testable formula was needed to build anything;
+  IMPL.md §10 anticipated this ("worth tuning once there's a real build
+  to profile") rather than treating it as settled.
+- **Affected epics/tasks**: E13-T1.
+
 *(entries above are the most recent)*

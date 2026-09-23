@@ -1,5 +1,6 @@
 mod constructor;
 mod model;
+mod score;
 mod verify;
 
 use model::{GenerateResult, Schedule, ScheduleInput};
@@ -16,6 +17,20 @@ pub fn verify(input: JsValue, schedule: JsValue) -> Result<JsValue, JsValue> {
         serde_wasm_bindgen::from_value(schedule).map_err(|e| JsValue::from_str(&e.to_string()))?;
     let violations = verify::verify(&input, &schedule);
     serde_wasm_bindgen::to_value(&violations).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// IMPL.md §4.2 (E13-T1): the FR-15 soft-objective breakdown for an
+/// already-valid Schedule. Standalone export so the UI (E13-T7) can explain
+/// why one ranked candidate outranks another, not just internal to the
+/// Refiner (E13-T2).
+#[wasm_bindgen]
+pub fn score(input: JsValue, schedule: JsValue) -> Result<JsValue, JsValue> {
+    let input: ScheduleInput =
+        serde_wasm_bindgen::from_value(input).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let schedule: Schedule =
+        serde_wasm_bindgen::from_value(schedule).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let breakdown = score::score(&input, &schedule);
+    serde_wasm_bindgen::to_value(&breakdown).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 /// E06-T3: the quick-mode path of IMPL.md §4.3's `generate` (Constructor

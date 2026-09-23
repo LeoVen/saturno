@@ -4,7 +4,13 @@
 // concern — this coordinator only ever talks to one Worker.
 
 import type { useEntitiesStore } from '../stores/entities'
-import type { GenerateResult, Schedule, ScheduleInput, Violation } from '../wasm/types'
+import type {
+  GenerateResult,
+  Schedule,
+  ScheduleInput,
+  ScoreBreakdown,
+  Violation,
+} from '../wasm/types'
 import type { SolverWorkerRequest, SolverWorkerResponse } from '../wasm/solver.worker'
 
 let worker: Worker | null = null
@@ -82,4 +88,18 @@ export async function verifySchedule(
   if (response.type === 'error') throw new Error(response.message)
   if (response.type !== 'verify') throw new Error('Resposta inesperada do solver.')
   return response.violations
+}
+
+/** IMPL.md §4.2 (E13-T1): the FR-15 soft-objective breakdown for an already-valid Schedule. */
+export async function scoreSchedule(
+  input: ScheduleInput,
+  schedule: Schedule,
+): Promise<ScoreBreakdown> {
+  const requestId = nextRequestId++
+  // Same Pinia-Proxy `DataCloneError` reasoning as `verifySchedule`.
+  const clonedSchedule = JSON.parse(JSON.stringify(schedule)) as Schedule
+  const response = await send({ type: 'score', requestId, input, schedule: clonedSchedule })
+  if (response.type === 'error') throw new Error(response.message)
+  if (response.type !== 'score') throw new Error('Resposta inesperada do solver.')
+  return response.breakdown
 }

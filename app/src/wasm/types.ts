@@ -126,3 +126,10 @@ export interface InfeasibilityReport {
 
 export type GenerateResult =
   { status: 'feasible'; schedule: Schedule } | { status: 'infeasible'; reason: InfeasibilityReport }
+
+/** IMPL.md §4.2 (E13-T1): the FR-15 soft-objective breakdown for an already-valid Schedule — every field, including `total`, is lower-is-better (solver/src/score.rs). */
+export interface ScoreBreakdown {
+  teacherGapPenalty: number
+  subjectDistributionPenalty: number
+  total: number
+}
