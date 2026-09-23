@@ -41,7 +41,7 @@ each one — called out once here instead of repeated 14 times:
 | E08 | Views: Per-Class & Per-Teacher | done | Browse the saved schedule both ways | [epics/E08-views-per-class-per-teacher.md](epics/E08-views-per-class-per-teacher.md) |
 | E09 | Manual Editing, Conflicts & Notes | done | Move an assignment, see conflicts flagged, attach a note | [epics/E09-manual-editing-conflicts-notes.md](epics/E09-manual-editing-conflicts-notes.md) |
 | E10 | Joint Sessions | done | Shared multi-class session schedules correctly, shown distinctly | [epics/E10-joint-sessions.md](epics/E10-joint-sessions.md) |
-| E11 | Native Data Portability | in-review | Export full state, import on a fresh profile, restored | [epics/E11-native-data-portability.md](epics/E11-native-data-portability.md) |
+| E11 | Native Data Portability | done | Export full state, import on a fresh profile, restored | [epics/E11-native-data-portability.md](epics/E11-native-data-portability.md) |
 | E12 | Human-Readable Export | in-progress | Print view and .xlsx match the school's grid format | [epics/E12-human-readable-export.md](epics/E12-human-readable-export.md) |
 | E13 | Deep Search | new | Time-boxed run, live progress, cancel, ranked candidates to choose from | [epics/E13-deep-search.md](epics/E13-deep-search.md) |
 | E14 | Teacher Absence & Repair | new | Mark absence → repair fills/reports vacated slots | [epics/E14-teacher-absence-repair.md](epics/E14-teacher-absence-repair.md) |

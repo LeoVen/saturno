@@ -1,6 +1,6 @@
 # E11 — Native Data Portability
 
-**Status**: in-review
+**Status**: done
 
 ## Goal
 
@@ -64,5 +64,6 @@ re-imported, on the same or a different computer, to fully restore it.
   restored and persisted across a reload, and confirmed a `schemaVersion`
   newer than this build supports is rejected with the correct pt-BR
   message. No console errors. This is agent-driven verification, not the
-  epic's own Human Verification steps — those still need a person to walk
-  them before this epic moves to `done`.
+  epic's own Human Verification steps.
+- **Human Verification walked by the user (2026-09-23)**: confirmed —
+  epic moved to `done`.
