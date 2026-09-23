@@ -1,6 +1,6 @@
 # INTERLUDE-2 — Profiles (Multi-Project Support)
 
-**Status**: in-review
+**Status**: done
 
 ## Goal
 
@@ -44,12 +44,12 @@ Profiles in it."
 
 | ID | Task | Status |
 |---|---|---|
-| INTERLUDE-2-T1 | `Profile` entity (`id`, `name`, `color`, `createdAt`) + a new `profiles` store (list + `activeProfileId`), persisted but exempt from the profile-scoping in T2 (it's what says which Profile is active); first-ever load with no `profiles` record yet auto-wraps any existing single-profile data into one default Profile rather than losing it | in-review |
-| INTERLUDE-2-T2 | Profile-scoped persistence: `entities`/`scheduleVersions` store state keyed by `${activeProfileId}:${storeId}` in `db.ts`/`persistencePlugin.ts` instead of bare `storeId`; switching the active Profile re-hydrates both stores from the new key | in-review |
-| INTERLUDE-2-T3 | Profile management actions: create blank, duplicate (deep-copy an existing Profile's entities + Schedule Versions under a new id, mirroring E07's `duplicate`), rename, delete (blocked if it's the only Profile left), assign a color from a small fixed palette (not a free color picker) | in-review |
-| INTERLUDE-2-T4 | Header UI (new — today's shell is just Sidebar + main content, no header): always-visible bar showing the active Profile's name + color swatch, with a dropdown to switch/manage Profiles; the active color is also visibly applied elsewhere (e.g. a sidebar accent) so a glance at any screen says which Profile is open | in-review |
-| INTERLUDE-2-T5 | Scope "Dados" (E11 JSON export/import) and the `.xlsx` export/import (E15) to the active Profile only; audit the rest of the app for anything that reads/writes entities or Schedule Versions outside the active-Profile-scoped stores | in-review |
-| INTERLUDE-2-T6 | Unit tests (TR-11-style): profile-scoped key-building, the duplicate-Profile deep-copy, and the first-load migration that wraps pre-existing single-profile data into a default Profile | in-review |
+| INTERLUDE-2-T1 | `Profile` entity (`id`, `name`, `color`, `createdAt`) + a new `profiles` store (list + `activeProfileId`), persisted but exempt from the profile-scoping in T2 (it's what says which Profile is active); first-ever load with no `profiles` record yet auto-wraps any existing single-profile data into one default Profile rather than losing it | done |
+| INTERLUDE-2-T2 | Profile-scoped persistence: `entities`/`scheduleVersions` store state keyed by `${activeProfileId}:${storeId}` in `db.ts`/`persistencePlugin.ts` instead of bare `storeId`; switching the active Profile re-hydrates both stores from the new key | done |
+| INTERLUDE-2-T3 | Profile management actions: create blank, duplicate (deep-copy an existing Profile's entities + Schedule Versions under a new id, mirroring E07's `duplicate`), rename, delete (blocked if it's the only Profile left), assign a color from a small fixed palette (not a free color picker) | done |
+| INTERLUDE-2-T4 | Header UI (new — today's shell is just Sidebar + main content, no header): always-visible bar showing the active Profile's name + color swatch, with a dropdown to switch/manage Profiles; the active color is also visibly applied elsewhere (e.g. a sidebar accent) so a glance at any screen says which Profile is open | done |
+| INTERLUDE-2-T5 | Scope "Dados" (E11 JSON export/import) and the `.xlsx` export/import (E15) to the active Profile only; audit the rest of the app for anything that reads/writes entities or Schedule Versions outside the active-Profile-scoped stores | done |
+| INTERLUDE-2-T6 | Unit tests (TR-11-style): profile-scoped key-building, the duplicate-Profile deep-copy, and the first-load migration that wraps pre-existing single-profile data into a default Profile | done |
 
 ## Decisions
 
@@ -148,5 +148,6 @@ Profiles in it."
   down to one Profile, then confirmed the delete guard blocked removing
   the last one with the correct pt-BR message. No console errors
   throughout. This is agent-driven verification, not the epic's own Human
-  Verification steps above — those still need a person to walk them
-  before this epic moves to `done`.
+  Verification steps above.
+- **Human Verification walked by the user (2026-09-23)**: confirmed —
+  epic moved to `done`.

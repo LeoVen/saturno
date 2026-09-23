@@ -46,7 +46,7 @@ each one — called out once here instead of repeated 14 times:
 | E13 | Deep Search | new | Time-boxed run, live progress, cancel, ranked candidates to choose from | [epics/E13-deep-search.md](epics/E13-deep-search.md) |
 | E14 | Teacher Absence & Repair | new | Mark absence → repair fills/reports vacated slots | [epics/E14-teacher-absence-repair.md](epics/E14-teacher-absence-repair.md) |
 | E15 | Excel Round-Trip Import | done | Export "Por Turma" .xlsx, reimport unmodified → new version restored | [epics/E15-excel-round-trip.md](epics/E15-excel-round-trip.md) |
-| INTERLUDE-2 | Profiles (Multi-Project Support) | in-review | Create/duplicate/switch Profiles from a header dropdown, each fully independent and color-coded | [epics/INTERLUDE-2-profiles.md](epics/INTERLUDE-2-profiles.md) |
+| INTERLUDE-2 | Profiles (Multi-Project Support) | done | Create/duplicate/switch Profiles from a header dropdown, each fully independent and color-coded | [epics/INTERLUDE-2-profiles.md](epics/INTERLUDE-2-profiles.md) |
 
 ## Sequencing notes
 
