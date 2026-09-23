@@ -1294,4 +1294,86 @@ Template for a new entry:
   literally rather than optimizing or scope-creeping ahead of them.
 - **Affected epics/tasks**: E13-T3.
 
+## D-53 — Deep search is clock-free in Rust: a resumable `RefineSession`/`DeepSearchSession`, elapsed time and slice sizing are the Worker's job
+
+- **Date**: 2026-09-23
+- **Type**: Implementation-only
+- **Spec refs**: IMPL.md §4.3, §5.1, §5.3
+- **What changes**: replaces E13-T2's one-shot `refine(iterations)` free
+  function and E13-T3's one-shot `generateDeep` wasm export (D-52) with a
+  resumable design:
+  - **`solver/src/refiner.rs`**: `refine` becomes `RefineSession`, a struct
+    holding the RNG/current-Schedule/best-so-far state across repeated
+    `run_slice(elapsed_ms, iterations)` calls. Cooling is now driven by
+    `elapsed_ms / time_budget_ms` (a real fraction of the actual time
+    budget, matching FR-32) rather than an iteration-count fraction known
+    up front — a genuine, necessary rework, not just a rename: a real
+    time-boxed run doesn't know its total iteration count in advance, so
+    the old per-call cooling curve couldn't carry over.
+  - **Deliberately never reads a clock itself**: both `elapsed_ms` (how
+    much real time the caller measured as spent so far) and `iterations`
+    (how many proposal attempts to make this call) are plain arguments.
+    Considered reading `Instant`/`web-time` internally and having
+    `RefineSession` own its own timer — rejected because it would make the
+    session non-deterministic and hard to unit-test (two "same seed" runs
+    could attempt different numbers of iterations depending on real
+    system timing jitter, breaking exactly the kind of determinism test
+    D-51 relies on). Keeping Rust clock-free means `RefineSession` stays
+    exactly as pure/TR-11-testable as the free function it replaced; all
+    wall-clock measurement and slice-pacing moved to
+    `solver.worker.ts`'s own driving loop.
+  - **`solver/src/lib.rs`**: a new `DeepSearchSession` wasm-exported class
+    (constructor runs the Constructor once; `runSlice` mirrors
+    `RefineSession::run_slice`) replaces `generateDeep`. An `Infeasible`
+    session (the Constructor itself failed) reports the same
+    `InfeasibilityReport` on every `runSlice` call, cheaply, without
+    touching the Refiner.
+  - **`solver.worker.ts`**: a new `startDeepSearch`/`cancelDeepSearch`
+    message pair replaces `generateDeep`. `startDeepSearch` drives an
+    autonomous slice loop — measuring real elapsed time via
+    `performance.now()`, adaptively sizing each slice's `iterations`
+    toward a `SLICE_TARGET_MS` (100ms) target based on how long the
+    *previous* slice actually took (since how many iterations take ~100ms
+    is hardware-dependent and can't be hardcoded), `postMessage`-ing a
+    `deepSearchProgress` message after every slice, and yielding to the
+    event loop (`setTimeout(…, 0)`, a real macrotask boundary — a
+    microtask wouldn't reliably let a pending `postMessage` be processed
+    first) so a `cancelDeepSearch` message can land between slices. On
+    cancellation, the Worker posts one final synthetic `done: true`
+    message on the cancelled run's own behalf, since `run_slice` itself
+    has no notion of cancellation — an earlier draft skipped this and the
+    pool hung forever waiting for a "done" that would never otherwise
+    arrive.
+  - **`deepSearchPool.ts`**: `runDeepSearchPool` (T3's one-shot function)
+    is replaced by `startDeepSearchPool(input, timeBudgetMs, onProgress)`,
+    returning `{ cancel, result }`. Aggregates every Worker's streamed
+    progress into one FR-34-shaped view (`elapsedMs`, `bestTotal` across
+    the whole pool, `candidatesFound`, `done`); `cancel()` broadcasts
+    `cancelDeepSearch` to every Worker. `result` resolves once every
+    Worker reports done, or immediately (cancelling the rest) on the
+    first `Infeasible`/genuine error.
+- **Why**: IMPL.md §5.3 is explicit that a real deep-search run must yield
+  control every ~100ms and support cancellation "checked at the top of
+  the next slice" — T3's one-shot `generateDeep` (itself explicitly
+  provisional, D-52) structurally couldn't do either. The clock-free
+  Rust design specifically avoids trading away T2's determinism/
+  testability guarantees to get there.
+- **Bug caught building this** (worth recording, not just fixing): the
+  new `SliceResult` enum in `lib.rs` initially had
+  `#[serde(rename_all = "camelCase")]` on the enum only, not each
+  variant — exactly the `Violation`-serialization bug `model.rs` already
+  carries a regression test for (E09). It silently sent
+  `new_candidates`/`best_total` instead of `newCandidates`/`bestTotal`;
+  the JS side read `undefined` for both, and `deepSearchPool.ts`'s
+  `...sliceResult.newCandidates` spread threw *inside* a Worker's
+  `onmessage` handler — an uncaught exception there doesn't reject any
+  Promise, so the whole pool just hung forever with no visible error.
+  Fixed by adding the attribute per-variant (matching `Violation`'s
+  pattern exactly) and adding
+  `slice_result_progress_fields_serialize_as_camel_case`
+  (`solver/src/lib.rs`) as a second, permanent regression test for this
+  exact class of mistake.
+- **Affected epics/tasks**: E13-T3 (supersedes `generateDeep`, most of
+  D-52 still stands: pool size/seeding/lifecycle/merge-scope), E13-T4.
+
 *(entries above are the most recent)*

@@ -134,13 +134,13 @@ export interface ScoreBreakdown {
   total: number
 }
 
-/** IMPL.md §5.1 (E13-T2): one improved state the Refiner found — see `solver/src/refiner.rs`'s `refine` for exactly when one is emitted. */
+/** IMPL.md §5.1 (E13-T2): one improved state the Refiner found — see `solver/src/refiner.rs`'s `RefineSession::run_slice` for exactly when one is emitted. */
 export interface Candidate {
   schedule: Schedule
   score: ScoreBreakdown
 }
 
-/** IMPL.md §4.3/§5.1/§5.2 (E13-T3): one Worker's whole contribution to a deep-search run — Constructor once, then the Refiner for a fixed iteration count from its own seed. Provisional, not yet time-boxed/streamed (D-19-style — see impls/DECISIONS.md for `generateDeep`'s own entry); `solver/src/lib.rs`'s `generateDeep`. */
-export type GenerateDeepResult =
-  | { status: 'feasible'; candidates: Candidate[] }
+/** IMPL.md §5.3 (E13-T4): one `DeepSearchSession.runSlice(elapsedMs, iterations)` call's outcome (`solver/src/lib.rs`) — `elapsedMs`/`iterations` are the caller's job to measure/choose (D-53), not read from a real clock inside the solver. An `infeasible` session reports the same `reason` on every call. */
+export type SliceResult =
   | { status: 'infeasible'; reason: InfeasibilityReport }
+  | { status: 'progress'; newCandidates: Candidate[]; bestTotal: number; done: boolean }

@@ -5,9 +5,7 @@ mod score;
 mod verify;
 
 use model::{GenerateResult, InfeasibilityReport, Schedule, ScheduleInput};
-use rand::SeedableRng;
-use rand_chacha::ChaCha8Rng;
-use refiner::Candidate;
+use refiner::{Candidate, RefineSession};
 use wasm_bindgen::prelude::*;
 
 /// IMPL.md §4.1: checks a candidate Schedule against every FR-14 hard
@@ -49,40 +47,128 @@ pub fn generate_quick(input: JsValue) -> Result<JsValue, JsValue> {
     serde_wasm_bindgen::to_value(&result).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
-/// IMPL.md §4.3/§5.1/§5.2 (E13-T3): one Worker's whole contribution to a
-/// deep-search run — the Constructor once, then the Refiner for
-/// `iterations` proposal attempts from `seed` (IMPL.md §5.2: "a distinct
-/// RNG seed" per Worker). Provisional shape, not yet time-boxed/streamed —
-/// see impls/DECISIONS.md, same precedent as `generateQuick`/D-19:
-/// E13-T4 will very likely rework the calling convention into
-/// slice-yielding, elapsed-time-driven messages without needing to change
-/// `refiner::refine` itself.
-#[derive(serde::Serialize)]
-#[serde(tag = "status", rename_all = "camelCase")]
-pub enum GenerateDeepResult {
-    Feasible { candidates: Vec<Candidate> },
-    Infeasible { reason: InfeasibilityReport },
+/// IMPL.md §4.3/§5.1/§5.2/§5.3 (E13-T3/T4): one Worker's whole contribution
+/// to a deep-search run — the Constructor once (deterministic; an
+/// infeasible `input` is reported identically regardless of `seed`), then
+/// a resumable `RefineSession` (IMPL.md §5.2: "a distinct RNG seed" per
+/// Worker) driven slice-by-slice via `runSlice` so the Worker's own message
+/// loop can yield between them (§5.3) — see D-53, which replaces E13-T3's
+/// one-shot `generateDeep` export with this session/slice shape.
+enum SessionState {
+    Infeasible(InfeasibilityReport),
+    Refining(Box<RefineSession>),
 }
 
-#[wasm_bindgen(js_name = generateDeep)]
-pub fn generate_deep(input: JsValue, seed: u32, iterations: u32) -> Result<JsValue, JsValue> {
-    let input: ScheduleInput =
-        serde_wasm_bindgen::from_value(input).map_err(|e| JsValue::from_str(&e.to_string()))?;
-    let result = match constructor::generate_quick(&input) {
-        GenerateResult::Infeasible { reason } => GenerateDeepResult::Infeasible { reason },
-        GenerateResult::Feasible { schedule } => {
-            let mut rng = ChaCha8Rng::seed_from_u64(u64::from(seed));
-            let candidates = refiner::refine(&input, &schedule, &mut rng, iterations);
-            GenerateDeepResult::Feasible { candidates }
-        }
-    };
-    serde_wasm_bindgen::to_value(&result).map_err(|e| JsValue::from_str(&e.to_string()))
+#[wasm_bindgen]
+pub struct DeepSearchSession {
+    state: SessionState,
+}
+
+#[wasm_bindgen]
+impl DeepSearchSession {
+    #[wasm_bindgen(constructor)]
+    pub fn new(
+        input: JsValue,
+        seed: u32,
+        time_budget_ms: f64,
+    ) -> Result<DeepSearchSession, JsValue> {
+        let input: ScheduleInput =
+            serde_wasm_bindgen::from_value(input).map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let state = match constructor::generate_quick(&input) {
+            GenerateResult::Infeasible { reason } => SessionState::Infeasible(reason),
+            GenerateResult::Feasible { schedule } => SessionState::Refining(Box::new(
+                RefineSession::new(input, schedule, u64::from(seed), time_budget_ms),
+            )),
+        };
+        Ok(DeepSearchSession { state })
+    }
+
+    /// Mirrors `RefineSession::run_slice` — `elapsed_ms` and `iterations`
+    /// are the caller's job to measure/choose (D-53). An `Infeasible`
+    /// session returns the same reason on every call, cheaply, without
+    /// touching the Refiner at all.
+    #[wasm_bindgen(js_name = runSlice)]
+    pub fn run_slice(&mut self, elapsed_ms: f64, iterations: u32) -> Result<JsValue, JsValue> {
+        let result = match &mut self.state {
+            SessionState::Infeasible(reason) => SliceResult::Infeasible {
+                reason: reason.clone(),
+            },
+            SessionState::Refining(session) => {
+                let outcome = session.run_slice(elapsed_ms, iterations);
+                SliceResult::Progress {
+                    new_candidates: outcome.new_candidates,
+                    best_total: outcome.best_total,
+                    done: outcome.done,
+                }
+            }
+        };
+        serde_wasm_bindgen::to_value(&result).map_err(|e| JsValue::from_str(&e.to_string()))
+    }
+}
+
+/// `rename_all` on the enum only renames the `status` tag, not each
+/// variant's own fields (model.rs's `Violation` carries a regression test
+/// for exactly this — E09 caught it the hard way once already); every
+/// variant repeats the attribute so `new_candidates`/`best_total` actually
+/// serialize as `newCandidates`/`bestTotal`, matching `wasm/types.ts`'s
+/// `SliceResult`.
+#[derive(serde::Serialize)]
+#[serde(tag = "status", rename_all = "camelCase")]
+enum SliceResult {
+    #[serde(rename_all = "camelCase")]
+    Infeasible { reason: InfeasibilityReport },
+    #[serde(rename_all = "camelCase")]
+    Progress {
+        new_candidates: Vec<Candidate>,
+        best_total: f64,
+        done: bool,
+    },
 }
 
 #[cfg(test)]
 mod tests {
     use super::model::*;
-    use super::{constructor, verify};
+    use super::{SliceResult, constructor, verify};
+    use crate::refiner::Candidate;
+    use crate::score::ScoreBreakdown;
+
+    /// Regression test for the exact bug `model.rs`'s `Violation` test
+    /// already guards against, caught again the hard way while building
+    /// E13-T4: `#[serde(rename_all = "camelCase")]` on an enum only renames
+    /// the tag, not each variant's own field names — missing the
+    /// per-variant attribute here silently sent `new_candidates`/
+    /// `best_total` to the JS side, which read `undefined` for
+    /// `newCandidates`/`bestTotal` and crashed `deepSearchPool.ts`'s
+    /// aggregation (a `...undefined` spread) invisibly inside a Worker's
+    /// `onmessage` handler — no thrown error the main thread ever saw, just
+    /// a pool that silently hung forever.
+    #[test]
+    fn slice_result_progress_fields_serialize_as_camel_case() {
+        let progress = SliceResult::Progress {
+            new_candidates: vec![Candidate {
+                schedule: Schedule {
+                    placements: Vec::new(),
+                    joint_session_placements: Vec::new(),
+                },
+                score: ScoreBreakdown {
+                    teacher_gap_penalty: 0.0,
+                    subject_distribution_penalty: 0.0,
+                    total: 0.0,
+                },
+            }],
+            best_total: 1.5,
+            done: false,
+        };
+        let json = serde_json::to_value(&progress).unwrap();
+        assert_eq!(json["status"], "progress");
+        assert!(json.get("newCandidates").is_some(), "{json}");
+        assert!(json.get("bestTotal").is_some(), "{json}");
+        assert!(
+            json.get("new_candidates").is_none(),
+            "must not be snake_case"
+        );
+        assert!(json.get("best_total").is_none(), "must not be snake_case");
+    }
 
     fn time_slot(id: &str, start: &str, end: &str) -> TimeSlot {
         TimeSlot {

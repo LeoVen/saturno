@@ -39,7 +39,7 @@ them by schedule quality, and lets them watch progress and cancel early.
 | E13-T1 | Implement `score(input, schedule) -> ScoreBreakdown` in Rust (FR-15, IMPL.md §4.2) | done |
 | E13-T2 | Implement the Refiner: perturb + re-verify + accept/reject by score, simulated-annealing-style (IMPL.md §5.1) | done |
 | E13-T3 | Worker pool: spawn N Workers (capped, per `navigator.hardwareConcurrency`), each with an independent RNG seed (IMPL.md §5.2) | done |
-| E13-T4 | Progress streaming (`candidatesFoundSoFar`, `bestScoreSoFar`, `elapsedMs`) and cancellation flag, checked at slice boundaries (IMPL.md §5.3) | new |
+| E13-T4 | Progress streaming (`candidatesFoundSoFar`, `bestScoreSoFar`, `elapsedMs`) and cancellation flag, checked at slice boundaries (IMPL.md §5.3) | done |
 | E13-T5 | Deduplication of near-identical candidates before ranking (IMPL.md §5.4) | new |
 | E13-T6 | Coordinator: merge/rank candidates across Workers, hand the ranked list to the UI | new |
 | E13-T7 | UI: time-budget input, live progress display, cancel button, ranked candidate list, "adopt as version" action wired to E07 (FR-32–34) | new |
@@ -54,10 +54,16 @@ them by schedule quality, and lets them watch progress and cancel early.
   Move/Swap only, Joint Sessions untouched), Candidate-emission rule
   (new-best-only), and cooling schedule (iteration-count-driven for now,
   score-scaled initial temperature).
-- See [D-52](../DECISIONS.md) — `generateDeep` (the per-Worker unit
-  composing Constructor + Refiner), the pool's size cap (6), per-Worker
+- See [D-52](../DECISIONS.md) — the pool's size cap (6), per-Worker
   seeding (`crypto.getRandomValues`), lifecycle (spawned/torn down per
-  run), and why merging/ranking stays out of `deepSearchPool.ts`.
+  run), and why merging/ranking stays out of `deepSearchPool.ts` (its
+  `generateDeep`/one-shot-per-Worker-call parts are superseded by D-53).
+- See [D-53](../DECISIONS.md) — `generateDeep` (T3) replaced by a
+  resumable `RefineSession`/`DeepSearchSession` driven slice-by-slice;
+  Rust stays deliberately clock-free (`elapsed_ms`/`iterations` are
+  caller-supplied) so the Refiner stays deterministic/testable; a real
+  `SliceResult` serde-casing bug caught and fixed (regression test
+  added).
 - *(Deduplication threshold is still open — IMPL.md §10 flags it as
   needing empirical tuning once real candidates exist. Log the actual
   choice here once made.)*
@@ -139,3 +145,38 @@ them by schedule quality, and lets them watch progress and cancel early.
   optimum (`total === 0`); a deliberately infeasible fixture (a Teacher
   unavailable every weekday) returned the correct pt-BR
   `InfeasibilityReport` message. No console errors in either run.
+  **Superseded by T4** — `generateDeep`/`runDeepSearchPool` (this
+  paragraph's one-shot shapes) no longer exist; see D-53. The pool
+  size/seeding/lifecycle/merge-scope decisions from this task stand
+  unchanged in `deepSearchPool.ts`'s new streaming shape.
+- **T4 implemented (2026-09-23)**: replaced E13-T2/T3's one-shot
+  `refine`/`generateDeep` with a resumable session
+  (`RefineSession`/`DeepSearchSession`) driven slice-by-slice — see
+  [D-53](../DECISIONS.md) for the full design and a genuinely serious bug
+  caught while verifying it (a `SliceResult` serde-casing mistake that
+  silently hung the whole pool with no error, same bug class as
+  `Violation`'s already-documented E09 regression). `solver.worker.ts`
+  gained `startDeepSearch`/`cancelDeepSearch`, driving an autonomous
+  slice loop that adaptively sizes each slice toward ~100ms and yields to
+  the event loop between slices so a cancellation can land.
+  `deepSearchPool.ts`'s `runDeepSearchPool` became
+  `startDeepSearchPool(input, timeBudgetMs, onProgress) ->
+  {cancel, result}`, aggregating every Worker's streamed progress into
+  one FR-34-shaped view.
+  2 new Rust unit tests (`RefineSession::run_slice`'s no-op-past-budget
+  behavior; the `SliceResult` camelCase regression test) plus the
+  existing T2 tests rewritten against the new session API rather than
+  duplicated (same intent: feasibility, strict improvement, determinism,
+  no-placements/already-optimal edge cases, Joint Sessions untouched) —
+  `cargo test`/`fmt --check`/`clippy -D warnings` all clean, 35 Rust
+  tests total. TS `test`/`lint`/`build` all green.
+  Verified end-to-end (agent-driven, headless Chromium via Playwright,
+  same convention as T1/T3): a normal run to a 1500ms budget streamed 108
+  progress events across 6 Workers, converged every Worker to the true
+  optimum, and finished in ~1660ms wall time (close to the budget, the
+  small overrun being real slice/postMessage/scheduling overhead);
+  cancelling 200ms into a 10-second budget resolved in ~274ms, not the
+  full 10s; the infeasible fixture returned the correct pt-BR reason. No
+  console errors in any run. The hung-pool bug above was only caught by
+  this verification step — the Rust unit tests alone didn't exercise the
+  actual wasm→JS serialization boundary.

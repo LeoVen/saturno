@@ -4,19 +4,23 @@
 //! always accept an improvement, sometimes accept a worse move early on to
 //! escape local optima, cooling off as the run progresses).
 //!
-//! Deliberately decoupled from wall-clock time: `refine` runs a fixed
-//! `iterations` count, cooling linearly over `i / iterations` rather than
-//! real elapsed time — E13-T4 is what turns this into slice-yielding,
-//! elapsed-time-driven calls from the Worker's message loop; this module
-//! only owns the search algorithm itself, kept fully deterministic and
-//! testable via an explicit seeded RNG (also what IMPL.md §5.2 needs
-//! per-Worker anyway).
+//! IMPL.md §5.3 (E13-T4): a real deep-search run is time-boxed and must
+//! yield control back to the Worker's own message loop every ~100ms (to
+//! `postMessage` progress and let a pending cancellation take effect) —
+//! not one multi-minute blocking call. `RefineSession` is a resumable
+//! search: it owns its RNG/current-Schedule/best-so-far state across
+//! repeated `run_slice` calls, cooling by elapsed-time fraction
+//! (`elapsed_ms / time_budget_ms`) rather than an iteration count known up
+//! front.
 //!
-//! Called from `lib.rs`'s `generateDeep` export (E13-T3) — a provisional,
-//! not-yet-time-boxed composition of the Constructor + this Refiner (see
-//! D-19's precedent for `generateQuick`, and impls/DECISIONS.md for
-//! `generateDeep`'s own entry); E13-T4 will very likely rework the calling
-//! shape into slice-yielding calls without changing this module itself.
+//! D-53: deliberately never reads a real clock itself — `run_slice` takes
+//! both `elapsed_ms` (how much real time the caller has measured as spent
+//! so far) and `iterations` (how many proposal attempts to make this call)
+//! as plain arguments. The caller (the Worker's own slice-driving loop,
+//! via `performance.now()`) owns all wall-clock measurement and decides
+//! how to size each slice; `RefineSession` stays exactly as pure and
+//! deterministic/TR-11-testable as E13-T2's original `refine(iterations)`
+//! free function, which this replaces rather than sits alongside.
 
 use crate::model::{Index, PlacedPeriod, Schedule, ScheduleInput, WEEKDAYS, Weekday};
 use crate::score::{ScoreBreakdown, score};
@@ -24,8 +28,8 @@ use crate::verify::verify;
 use rand::Rng;
 use std::collections::HashSet;
 
-/// One improved state the Refiner found — see `refine`'s doc comment for
-/// exactly when one is emitted.
+/// One improved state the Refiner found — see `RefineSession::run_slice`'s
+/// doc comment for exactly when one is emitted.
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Candidate {
@@ -44,79 +48,135 @@ const INITIAL_TEMPERATURE_FRACTION: f64 = 0.2;
 /// the temperature and disable early exploration entirely.
 const MIN_INITIAL_TEMPERATURE: f64 = 1.0;
 
-/// Runs the Refiner for exactly `iterations` proposal attempts (feasible or
-/// not — an attempt that turns out infeasible still consumes one, the same
-/// as a real search "wasting" an iteration on a dead end) starting from
-/// `initial` (assumed already feasible per IMPL.md §5.1 — never re-verified
-/// here). `rng` is caller-owned and caller-seeded (IMPL.md §5.2: one
-/// distinct seed per Worker).
-///
-/// A Candidate is emitted exactly when an accepted move produces a new
-/// best-ever `score().total` for this run (D-51) — not on every accepted
-/// move (simulated annealing can accept a worse move to escape a local
-/// optimum; that intermediate state is part of the walk, not a result worth
-/// surfacing on its own) and not via a separate "is this a local optimum"
-/// neighborhood check (expensive, and not needed since every emitted
-/// Candidate is, by construction, at least as good as everything found
-/// before it in this run — IMPL.md §10 already flags acceptance/emission
-/// strategy as open for empirical tuning).
-///
-/// Only ever perturbs `schedule.placements` — Joint Session placements
-/// (FR-25) are left untouched (see D-51): moving one affects every
-/// participating Class and Track Teacher at once, a materially different
-/// and more expensive move than the two below, and IMPL.md §5.1 doesn't
-/// mention Joint Sessions as Refiner scope.
-pub fn refine(
-    input: &ScheduleInput,
-    initial: &Schedule,
-    rng: &mut impl Rng,
-    iterations: u32,
-) -> Vec<Candidate> {
-    let idx = Index::build(input);
-    let mut current = initial.clone();
-    let mut current_total = score(input, &current).total;
-    let mut best_total = current_total;
-    let mut candidates = Vec::new();
+/// One `run_slice` call's outcome.
+pub struct SliceOutcome {
+    /// New best-so-far Candidates found during this slice specifically
+    /// (not the session's whole history) — the caller accumulates these
+    /// across slices itself.
+    pub new_candidates: Vec<Candidate>,
+    pub best_total: f64,
+    /// `true` once the caller-supplied `elapsed_ms` has reached the
+    /// session's own `time_budget_ms` — the caller should stop calling
+    /// `run_slice` again.
+    pub done: bool,
+}
 
-    let initial_temperature =
-        (current_total * INITIAL_TEMPERATURE_FRACTION).max(MIN_INITIAL_TEMPERATURE);
+/// A resumable Refiner run (IMPL.md §5.3/D-53). Constructed once per deep-
+/// search attempt from a Constructor's feasible `initial` Schedule, a seed
+/// (IMPL.md §5.2: one per Worker), and the run's overall `time_budget_ms`
+/// (FR-32); then driven by repeated `run_slice(elapsed_ms, iterations)`
+/// calls — see `run_slice`'s own doc comment for why both are the caller's
+/// job, not something this session measures itself.
+pub struct RefineSession {
+    input: ScheduleInput,
+    rng: rand_chacha::ChaCha8Rng,
+    current: Schedule,
+    current_total: f64,
+    best_total: f64,
+    initial_temperature: f64,
+    time_budget_ms: f64,
+}
 
-    for i in 0..iterations {
-        let progress = if iterations <= 1 {
-            1.0
-        } else {
-            f64::from(i) / f64::from(iterations - 1)
-        };
-        let temperature = initial_temperature * (1.0 - progress);
-
-        let Some(candidate_schedule) = propose_move(&idx, input, &current, rng) else {
-            continue;
-        };
-        if !verify(input, &candidate_schedule).is_empty() {
-            continue;
-        }
-
-        let candidate_total = score(input, &candidate_schedule).total;
-        let delta = candidate_total - current_total;
-        let accept = delta <= 0.0
-            || (temperature > 0.0 && rng.r#gen::<f64>() < (-delta / temperature).exp());
-        if !accept {
-            continue;
-        }
-
-        current = candidate_schedule;
-        current_total = candidate_total;
-
-        if current_total < best_total {
-            best_total = current_total;
-            candidates.push(Candidate {
-                schedule: current.clone(),
-                score: score(input, &current),
-            });
+impl RefineSession {
+    pub fn new(input: ScheduleInput, initial: Schedule, seed: u64, time_budget_ms: f64) -> Self {
+        let current_total = score(&input, &initial).total;
+        let initial_temperature =
+            (current_total * INITIAL_TEMPERATURE_FRACTION).max(MIN_INITIAL_TEMPERATURE);
+        RefineSession {
+            input,
+            rng: <rand_chacha::ChaCha8Rng as rand::SeedableRng>::seed_from_u64(seed),
+            current: initial,
+            current_total,
+            best_total: current_total,
+            initial_temperature,
+            time_budget_ms,
         }
     }
 
-    candidates
+    fn temperature_at(&self, elapsed_ms: f64) -> f64 {
+        let progress = (elapsed_ms / self.time_budget_ms).min(1.0);
+        self.initial_temperature * (1.0 - progress)
+    }
+
+    /// Runs up to `iterations` proposal attempts at a single temperature
+    /// derived from `elapsed_ms` (constant for the whole call — cooling
+    /// happens *between* calls, as the caller advances `elapsed_ms`, not
+    /// within one). Does nothing (returns `done: true` immediately) if
+    /// `elapsed_ms` has already reached `time_budget_ms`.
+    ///
+    /// D-53: deliberately takes both as plain arguments rather than reading
+    /// a clock or an internal counter — `elapsed_ms` is how much real time
+    /// the caller has measured as spent so far (e.g. via
+    /// `performance.now()`), `iterations` is how many attempts to make this
+    /// call (the caller's own proxy for "about how long one slice should
+    /// take", tuned/adapted at the call site). This keeps `RefineSession`
+    /// itself exactly as pure, deterministic, and TR-11-testable as E13-T2's
+    /// original one-shot `refine(iterations)` free function — real
+    /// wall-clock measurement and slice-pacing are the Worker's own
+    /// slice-driving loop's job (IMPL.md §5.3), not this module's.
+    ///
+    /// A Candidate is emitted exactly when an accepted move produces a new
+    /// best-ever `score().total` for this session (D-51) — not on every
+    /// accepted move (simulated annealing can accept a worse move to
+    /// escape a local optimum; that intermediate state is part of the
+    /// walk, not a result worth surfacing on its own) and not via a
+    /// separate "is this a local optimum" neighborhood check (expensive,
+    /// and unnecessary since every emitted Candidate is, by construction,
+    /// at least as good as everything found earlier in the run —
+    /// IMPL.md §10 already flags acceptance/emission strategy as open for
+    /// empirical tuning).
+    ///
+    /// Only ever perturbs `schedule.placements` — Joint Session placements
+    /// (FR-25) are left untouched (D-51): moving one affects every
+    /// participating Class and Track Teacher at once, a materially
+    /// different and more expensive move than the two `propose_move`
+    /// below makes, and IMPL.md §5.1 doesn't mention Joint Sessions as
+    /// Refiner scope.
+    pub fn run_slice(&mut self, elapsed_ms: f64, iterations: u32) -> SliceOutcome {
+        let mut new_candidates = Vec::new();
+
+        if elapsed_ms < self.time_budget_ms {
+            let idx = Index::build(&self.input);
+            let temperature = self.temperature_at(elapsed_ms);
+
+            for _ in 0..iterations {
+                let Some(candidate_schedule) =
+                    propose_move(&idx, &self.input, &self.current, &mut self.rng)
+                else {
+                    continue;
+                };
+                if !verify(&self.input, &candidate_schedule).is_empty() {
+                    continue;
+                }
+
+                let candidate_total = score(&self.input, &candidate_schedule).total;
+                let delta = candidate_total - self.current_total;
+                let accept = delta <= 0.0
+                    || (temperature > 0.0
+                        && self.rng.r#gen::<f64>() < (-delta / temperature).exp());
+                if !accept {
+                    continue;
+                }
+
+                self.current = candidate_schedule;
+                self.current_total = candidate_total;
+
+                if self.current_total < self.best_total {
+                    self.best_total = self.current_total;
+                    new_candidates.push(Candidate {
+                        schedule: self.current.clone(),
+                        score: score(&self.input, &self.current),
+                    });
+                }
+            }
+        }
+
+        SliceOutcome {
+            new_candidates,
+            best_total: self.best_total,
+            done: elapsed_ms >= self.time_budget_ms,
+        }
+    }
 }
 
 /// Picks a random Class with at least one placement and proposes either a
@@ -205,8 +265,6 @@ mod tests {
     use crate::model::{
         Assignment, Class, Grade, JointSessionPlacement, Segment, Subject, Teacher, TimeSlot,
     };
-    use rand::SeedableRng;
-    use rand_chacha::ChaCha8Rng;
 
     fn time_slot(id: &str, start: &str, end: &str) -> TimeSlot {
         TimeSlot {
@@ -302,8 +360,31 @@ mod tests {
         }
     }
 
-    fn rng(seed: u64) -> ChaCha8Rng {
-        ChaCha8Rng::seed_from_u64(seed)
+    /// Drives a `RefineSession` to completion the same way the real Worker
+    /// slice-driving loop will (IMPL.md §5.3): repeated `run_slice` calls
+    /// with `elapsed_ms` stepped forward by `elapsed_step_ms` each time,
+    /// until `done`. Deterministic (no real clock involved) — same seed and
+    /// same slice/step parameters always produce the same result.
+    fn run_to_completion(
+        input: &ScheduleInput,
+        initial: &Schedule,
+        seed: u64,
+        time_budget_ms: f64,
+        iterations_per_slice: u32,
+        elapsed_step_ms: f64,
+    ) -> Vec<Candidate> {
+        let mut session = RefineSession::new(input.clone(), initial.clone(), seed, time_budget_ms);
+        let mut candidates = Vec::new();
+        let mut elapsed = 0.0;
+        loop {
+            let mut outcome = session.run_slice(elapsed, iterations_per_slice);
+            candidates.append(&mut outcome.new_candidates);
+            if outcome.done {
+                break;
+            }
+            elapsed += elapsed_step_ms;
+        }
+        candidates
     }
 
     /// One Class, one Teacher, 5 weekly occurrences of one Subject in a
@@ -336,6 +417,22 @@ mod tests {
     }
 
     #[test]
+    fn run_slice_is_a_cheap_no_op_once_elapsed_ms_reaches_the_time_budget() {
+        let (input, initial) = concentrated_but_feasible();
+        let mut session = RefineSession::new(input, initial, 1, 100.0);
+
+        let outcome = session.run_slice(100.0, 500);
+        assert!(outcome.new_candidates.is_empty());
+        assert!(outcome.done);
+
+        // Calling again (as a driving loop might do once more before
+        // noticing `done`) must stay a no-op, not panic or keep searching.
+        let outcome = session.run_slice(150.0, 500);
+        assert!(outcome.new_candidates.is_empty());
+        assert!(outcome.done);
+    }
+
+    #[test]
     fn every_candidate_is_feasible_and_strictly_improves_on_the_one_before_it() {
         let (input, initial) = concentrated_but_feasible();
         assert!(
@@ -343,7 +440,7 @@ mod tests {
             "fixture must start feasible"
         );
 
-        let candidates = refine(&input, &initial, &mut rng(1), 500);
+        let candidates = run_to_completion(&input, &initial, 1, 1000.0, 50, 100.0);
         assert!(
             !candidates.is_empty(),
             "expected at least one improvement to be found"
@@ -368,7 +465,7 @@ mod tests {
         let (input, initial) = concentrated_but_feasible();
         let initial_total = score(&input, &initial).total;
 
-        let candidates = refine(&input, &initial, &mut rng(7), 2000);
+        let candidates = run_to_completion(&input, &initial, 7, 2000.0, 100, 100.0);
         let best = candidates.last().expect("expected an improvement");
         assert!(best.score.total < initial_total);
         // A fully spread-out (one-per-weekday) arrangement has zero
@@ -382,8 +479,8 @@ mod tests {
     fn same_seed_produces_the_same_candidates() {
         let (input, initial) = concentrated_but_feasible();
 
-        let run_a = refine(&input, &initial, &mut rng(42), 200);
-        let run_b = refine(&input, &initial, &mut rng(42), 200);
+        let run_a = run_to_completion(&input, &initial, 42, 200.0, 20, 20.0);
+        let run_b = run_to_completion(&input, &initial, 42, 200.0, 20, 20.0);
         let totals_a: Vec<f64> = run_a.iter().map(|c| c.score.total).collect();
         let totals_b: Vec<f64> = run_b.iter().map(|c| c.score.total).collect();
         assert_eq!(totals_a, totals_b);
@@ -404,8 +501,9 @@ mod tests {
             placements: Vec::new(),
             joint_session_placements: Vec::new(),
         };
-        let candidates = refine(&input, &initial, &mut rng(1), 50);
-        assert!(candidates.is_empty());
+        let mut session = RefineSession::new(input, initial, 1, 1000.0);
+        let outcome = session.run_slice(0.0, 50);
+        assert!(outcome.new_candidates.is_empty());
     }
 
     #[test]
@@ -447,8 +545,9 @@ mod tests {
             "fixture must start already optimal"
         );
 
-        let candidates = refine(&input, &initial, &mut rng(1), 200);
-        assert!(candidates.is_empty());
+        let mut session = RefineSession::new(input, initial, 1, 1000.0);
+        let outcome = session.run_slice(0.0, 200);
+        assert!(outcome.new_candidates.is_empty());
     }
 
     #[test]
@@ -477,7 +576,7 @@ mod tests {
             joint_session_placements: vec![joint.clone()],
         };
 
-        let candidates = refine(&input, &initial, &mut rng(3), 200);
+        let candidates = run_to_completion(&input, &initial, 3, 200.0, 20, 20.0);
         for c in &candidates {
             assert_eq!(c.schedule.joint_session_placements.len(), 1);
             let jp = &c.schedule.joint_session_placements[0];
