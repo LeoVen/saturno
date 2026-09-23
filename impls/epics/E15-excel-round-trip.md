@@ -1,6 +1,6 @@
 # E15 — Excel Round-Trip Import
 
-**Status**: in-review
+**Status**: done
 
 ## Goal
 
@@ -83,5 +83,6 @@ arbitrary teacher-made file).
   sitting in the repo root (generated before this epic, no manifest) is
   rejected with the intended pt-BR error rather than a silent
   misinterpretation. No console errors. This is agent-driven verification,
-  not the epic's own Human Verification steps above — those still need a
-  person to walk them before this epic moves to `done`.
+  not the epic's own Human Verification steps above.
+- **Human Verification walked by the user (2026-09-23)**: confirmed —
+  epic moved to `done`.
