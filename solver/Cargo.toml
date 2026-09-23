@@ -10,6 +10,13 @@ crate-type = ["cdylib", "rlib"]
 wasm-bindgen = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde-wasm-bindgen = "0.6"
+# E13-T2/T3: the Refiner's perturbation choices and IMPL.md §5.2's "each
+# Worker gets a distinct RNG seed" both need a real PRNG. `default-features
+# = false` on both: no OS entropy (`getrandom`) dependency, since every seed
+# is always explicit (`SeedableRng::seed_from_u64`) — keeps the wasm build
+# free of the extra JS-shim wiring `getrandom`'s wasm backend would need.
+rand = { version = "0.8", default-features = false }
+rand_chacha = { version = "0.3", default-features = false }
 
 [dev-dependencies]
 # Only to assert the exact wire shape of a few Serialize types in tests

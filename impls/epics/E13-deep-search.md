@@ -37,7 +37,7 @@ them by schedule quality, and lets them watch progress and cancel early.
 | ID | Task | Status |
 |---|---|---|
 | E13-T1 | Implement `score(input, schedule) -> ScoreBreakdown` in Rust (FR-15, IMPL.md §4.2) | done |
-| E13-T2 | Implement the Refiner: perturb + re-verify + accept/reject by score, simulated-annealing-style (IMPL.md §5.1) | new |
+| E13-T2 | Implement the Refiner: perturb + re-verify + accept/reject by score, simulated-annealing-style (IMPL.md §5.1) | done |
 | E13-T3 | Worker pool: spawn N Workers (capped, per `navigator.hardwareConcurrency`), each with an independent RNG seed (IMPL.md §5.2) | new |
 | E13-T4 | Progress streaming (`candidatesFoundSoFar`, `bestScoreSoFar`, `elapsedMs`) and cancellation flag, checked at slice boundaries (IMPL.md §5.3) | new |
 | E13-T5 | Deduplication of near-identical candidates before ranking (IMPL.md §5.4) | new |
@@ -50,10 +50,13 @@ them by schedule quality, and lets them watch progress and cancel early.
 - See [D-50](../DECISIONS.md) — `score`'s two FR-15 metrics (teacher-gap
   minutes, per-(Class,Subject) daily-count variance) and their weights
   into `total`, all lower-is-better.
-- *(Refiner acceptance strategy, Worker pool size cap, and deduplication
-  threshold are still open — IMPL.md §10 flags them as needing empirical
-  tuning once real candidates exist. Log the actual choices here once
-  made.)*
+- See [D-51](../DECISIONS.md) — the Refiner's move set (intra-Class
+  Move/Swap only, Joint Sessions untouched), Candidate-emission rule
+  (new-best-only), and cooling schedule (iteration-count-driven for now,
+  score-scaled initial temperature).
+- *(Worker pool size cap and deduplication threshold are still open —
+  IMPL.md §10 flags them as needing empirical tuning once real candidates
+  exist. Log the actual choices here once made.)*
 
 ## Notes
 
@@ -77,3 +80,30 @@ them by schedule quality, and lets them watch progress and cancel early.
   test added for the coordinator/worker plumbing itself (thin pass-
   through, same as `verifySchedule`'s own precedent — no existing test
   file for that either).
+- **T2 implemented (2026-09-23)**: `solver/src/refiner.rs`'s `refine`,
+  perturbing only `schedule.placements` via intra-Class Move/Swap moves,
+  rejecting infeasible proposals via `verify`, accepting/rejecting
+  feasible ones by a simulated-annealing rule over `score`'s `total`, and
+  emitting a `Candidate` on every new-best (see [D-51](../DECISIONS.md)
+  for the exact move set, emission rule, and cooling schedule — all
+  explicitly flagged as tunable, not empirically validated against a real
+  school yet). Added `rand`/`rand_chacha` (both `default-features =
+  false` — always explicitly seeded, no OS-entropy/`getrandom`
+  dependency) so both this and E13-T3's per-Worker seeding have a real
+  PRNG. Not yet wired into `lib.rs`'s wasm-exported surface or called
+  from anywhere outside its own tests (`#[allow(dead_code)]` on the
+  module, with a comment pointing at T3/T4/T6) — IMPL.md §4.3 makes clear
+  `generate` is the single function that assembles Constructor + Refiner
+  together, and that assembly (plus the real time-boxing) is explicitly
+  later tasks' job, not T2's.
+  8 new Rust unit tests (`cargo test`/`fmt --check`/`clippy -D warnings`
+  all clean) cover: every emitted Candidate is independently feasible and
+  strictly improves on the previous one; a concentrated-but-feasible
+  fixture reaches the true optimum (`total == 0.0`) within a fixed
+  iteration budget; determinism (same seed ⇒ identical candidate
+  sequence); a Class with no placements yields no move without panicking;
+  an already-fully-packed, already-optimal Class only ever proposes Swaps
+  (never Moves) and never emits (nothing to improve); Joint Session
+  placements are provably untouched across every emitted candidate.
+  `wasm-pack build` and the full TS `test`/`lint`/`build` all verified
+  green after the new dependency.

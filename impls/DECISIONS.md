@@ -1179,4 +1179,64 @@ Template for a new entry:
   to profile") rather than treating it as settled.
 - **Affected epics/tasks**: E13-T1.
 
+## D-51 — Refiner move set, Candidate-emission rule, and cooling schedule
+
+- **Date**: 2026-09-23
+- **Type**: Implementation-only
+- **Spec refs**: FR-15, IMPL.md §5.1, §10
+- **What changes**: IMPL.md §5.1 names the Refiner's shape ("perturbs it
+  (e.g. swap two assignments, reassign a slot)... accepting or rejecting
+  moves based on `score`... simulated-annealing-style... Each
+  locally-optimal or improved state encountered is emitted as a
+  `Candidate`") but leaves the exact move set, emission trigger, and
+  cooling curve open — §10 explicitly flags "Refiner acceptance strategy"
+  as unresolved. Implemented (`solver/src/refiner.rs`):
+  - **Move set**: exactly IMPL.md's two named examples, both scoped to a
+    single randomly-picked Class's own `placements` — "Move" (relocate
+    one placement to a currently-empty (weekday, TimeSlot) for that same
+    Class) and "Swap" (trade two of that Class's placements' slots).
+    Never cross-class, never touches `jointSessionPlacements` (FR-25) —
+    a Joint Session move would need to reschedule every participating
+    Class and Track Teacher at once, a materially bigger and differently-
+    shaped operation IMPL.md's Refiner section never mentions.
+  - **Feasibility**: every proposal is checked with the real `verify()`
+    (not re-derived) and simply discarded — counted as one "spent"
+    iteration either way — if infeasible; no attempt to only generate
+    moves that are provably safe in advance.
+  - **Emission rule**: a `Candidate` is pushed exactly when an accepted
+    move sets a new best-ever `score().total` for the run — not on every
+    accepted move (an SA-accepted worse move is a mid-walk state, not a
+    result worth surfacing) and not via a separate "is this a local
+    optimum" neighborhood scan (expensive, open-ended to define
+    precisely, and unnecessary: every emitted Candidate is already
+    at-least-as-good as everything found earlier in the run, which is
+    what "locally optimal or improved" is really protecting against
+    showing the user a same-or-worse result).
+  - **Cooling**: `refine(input, initial, rng, iterations)` takes a plain
+    iteration count, not a time budget — E13-T4 (progress
+    streaming/cancellation) is the task that turns this into real
+    elapsed-time slicing; `refine` itself only needs *some* notion of
+    "how far through the run," so it linearly cools
+    `initial_temperature * (1 - i/(iterations-1))`.
+    `initial_temperature = max(startingScore.total * 0.2, 1.0)` — scaled
+    off the starting Schedule's own score (its units aren't a fixed
+    range) rather than a constant, with a floor so an already-perfect
+    (`total == 0`) starting point still gets some early exploration
+    instead of degenerating to pure greedy descent from iteration 0.
+  - **RNG**: `rand_chacha::ChaCha8Rng`, always explicitly seeded
+    (`default-features = false` on both `rand`/`rand_chacha` — no
+    `getrandom`/OS-entropy dependency, since a seed is always passed in;
+    IMPL.md §5.2 needs one distinct seed per Worker anyway, and this
+    keeps `refine` itself fully deterministic and unit-testable).
+- **Why**: IMPL.md §10 anticipated the acceptance/emission strategy would
+  need a concrete first choice before Refiner work could start at all
+  ("Tabu search or a genetic algorithm... worth a spike... if someone has
+  a strong prior") — none was raised, so the originally-proposed
+  simulated-annealing shape was implemented as literally as the spec text
+  allows, with the open points above resolved as narrowly as possible
+  rather than guessing at unstated intent. All of it (weights, cooling
+  rate, move set) is explicitly flagged as tunable once E13-T3's Worker
+  pool produces real ranked runs to eyeball, same as D-50's score weights.
+- **Affected epics/tasks**: E13-T2.
+
 *(entries above are the most recent)*
