@@ -1,6 +1,6 @@
 # E12 — Human-Readable Export
 
-**Status**: in-progress
+**Status**: done
 
 ## Goal
 
@@ -35,7 +35,7 @@ use the app — comparable in layout to the school's existing spreadsheets in
 | E12-T1 | Shared view-model: lay out a Schedule Version's per-Class/per-Teacher data into the two-days-per-row, breaks-as-dividers shape (IMPL.md §9) | done |
 | E12-T2 | `@media print` stylesheet + print trigger for the on-screen grid components (TR-13) | done |
 | E12-T3 | `.xlsx` generation via `exceljs`: fills, merges, column widths matching the real sample sheets (TR-13) | done |
-| E12-T4 | Notes footnote list + slot-level reference markers, identical in both output paths (FR-19, IMPL.md §9) | in-review |
+| E12-T4 | Notes footnote list + slot-level reference markers, identical in both output paths (FR-19, IMPL.md §9) | done |
 
 ## Decisions
 
@@ -73,15 +73,16 @@ use the app — comparable in layout to the school's existing spreadsheets in
   with a marker, and a Teacher grid only picking up a Note that matches
   that Teacher's own placement.
 - Verified end-to-end (agent-driven, not the epic's own Human Verification
-  steps below — those still need a person) against a small synthetic
-  fixture in a headless-Chromium session: imported via "Dados", a whole-
-  schedule Note plus three slot Notes (one on an occupied cell, one on an
-  empty cell, one on a different Teacher's period) all landed with the
-  expected footnote numbers/scoping in both Per-Turma and Por Professor
-  modes, in the on-screen preview, `@media print` emulation, and the
-  downloaded `.xlsx` (inspected directly via `exceljs` — superscript runs
-  and "Observação N" rows exactly matched what the preview showed). No
-  console errors.
+  steps below) against a small synthetic fixture in a headless-Chromium
+  session: imported via "Dados", a whole-schedule Note plus three slot
+  Notes (one on an occupied cell, one on an empty cell, one on a different
+  Teacher's period) all landed with the expected footnote numbers/scoping
+  in both Per-Turma and Por Professor modes, in the on-screen preview,
+  `@media print` emulation, and the downloaded `.xlsx` (inspected directly
+  via `exceljs` — superscript runs and "Observação N" rows exactly matched
+  what the preview showed). No console errors.
+- **Human Verification walked by the user (2026-09-23)**: confirmed —
+  epic moved to `done`.
 - **E12-T4 was blocked on E09, not implemented, until now**: FR-19 Notes (slot-level
   and whole-schedule) don't exist anywhere yet — no entity, no field on
   `ScheduleVersion`, no UI to create one (E09 "Manual Editing, Conflicts &
