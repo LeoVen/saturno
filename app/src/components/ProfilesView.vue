@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useProfilesStore } from '../stores/profiles'
+import { confirmAndResetForProfileSwitch } from '../stores/profileSwitchGuard'
 import { PROFILE_COLORS } from '../entities/profile'
 
 // INTERLUDE-2 (D-42): full Profile management — mirrors
@@ -22,6 +23,7 @@ function renameProfile(id: string, event: Event): void {
 function createProfile(): void {
   const name = prompt('Nome do novo Perfil:')
   if (name === null) return
+  if (!confirmAndResetForProfileSwitch()) return
   store.create(name)
   errorMessage.value = ''
 }
@@ -29,12 +31,22 @@ function createProfile(): void {
 function duplicateProfile(id: string, name: string): void {
   const newName = prompt('Nome do novo Perfil:', `${name} (cópia)`)
   if (newName === null) return
+  if (!confirmAndResetForProfileSwitch()) return
   void store.duplicate(id, newName)
   errorMessage.value = ''
 }
 
+function activateProfile(id: string): void {
+  if (!confirmAndResetForProfileSwitch()) return
+  store.setActive(id)
+}
+
 async function removeProfile(id: string, name: string): Promise<void> {
   if (!confirm(`Excluir o Perfil "${name}"? Essa ação não pode ser desfeita.`)) return
+  // Deleting the *active* Profile also switches away from it — same
+  // "don't leak the old Profile's unsaved ephemeral work" risk as any
+  // other switch, so it goes through the same gate.
+  if (id === store.activeProfileId && !confirmAndResetForProfileSwitch()) return
   const result = await store.remove(id)
   errorMessage.value = result.ok ? '' : result.error
 }
@@ -92,7 +104,7 @@ async function removeProfile(id: string, name: string): Promise<void> {
           <td class="muted">{{ formatCreatedAt(p.createdAt) }}</td>
           <td>
             <span v-if="p.id === store.activeProfileId" class="pill selected">Ativo</span>
-            <button v-else type="button" class="btn btn-sm" @click="store.setActive(p.id)">
+            <button v-else type="button" class="btn btn-sm" @click="activateProfile(p.id)">
               Ativar
             </button>
           </td>

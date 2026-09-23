@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useProfilesStore } from '../stores/profiles'
+import { confirmAndResetForProfileSwitch } from '../stores/profileSwitchGuard'
 import { profileColorHex } from '../entities/profile'
 
 // INTERLUDE-2 (D-42): always-visible Profile switcher — user's own ask for
@@ -16,14 +17,20 @@ const store = useProfilesStore()
 const open = ref(false)
 
 function switchTo(id: string): void {
-  store.setActive(id)
+  if (id === store.activeProfileId) {
+    open.value = false
+    return
+  }
   open.value = false
+  if (!confirmAndResetForProfileSwitch()) return
+  store.setActive(id)
 }
 
 function createProfile(): void {
   const name = prompt('Nome do novo Perfil:')
   open.value = false
   if (name === null) return
+  if (!confirmAndResetForProfileSwitch()) return
   store.create(name)
 }
 

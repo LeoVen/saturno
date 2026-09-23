@@ -151,3 +151,14 @@ Profiles in it."
   Verification steps above.
 - **Human Verification walked by the user (2026-09-23)**: confirmed —
   epic moved to `done`.
+- **Bug fix, user-reported (2026-09-23)**: switching Profiles didn't reset
+  the ephemeral `generation`/`deepSearch` stores (only `entities`/
+  `scheduleVersions` were Profile-scoped) — a previous Profile's
+  just-generated schedule or Busca Aprofundada candidates stayed visible
+  and save-able into the newly-active Profile. See
+  [D-56](../DECISIONS.md) for the fix (`stores/profileSwitchGuard.ts`,
+  gating every Profile-switching UI action: warn if there's unsaved
+  ephemeral work and let the user back out, otherwise reset both stores
+  before switching). Verified via headless Chromium — no console errors.
+  A retrofit, not a reopening of this epic's own checkpoint (same
+  convention as D-47/D-48).

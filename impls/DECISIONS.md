@@ -1439,4 +1439,50 @@ Template for a new entry:
   validation-gate code were both left to implementation judgment.
 - **Affected epics/tasks**: E13-T7.
 
+## D-56 — Profile switch clears ephemeral generation-run state, warning first if there's anything unsaved
+
+- **Date**: 2026-09-23
+- **Type**: Deviation (bug fix)
+- **Spec refs**: INTERLUDE-2 (D-42), FR-24, FR-32/33
+- **What changes**: user-reported bug — switching the active Profile only
+  ever re-hydrated `entities`/`scheduleVersions`
+  (`persistence/profilesPersistence.ts`'s watcher); the two ephemeral,
+  never-persisted generation-run stores (`generation.ts`'s quick mode,
+  `deepSearch.ts`'s E13 deep mode) were never touched, so a previous
+  Profile's just-generated schedule or Busca Aprofundada candidates
+  stayed visible — and, worse, "Salvar como nova versão"/"Adotar como
+  versão" would silently attach that old Profile's result to the
+  newly-active one. Fixed with a new `stores/profileSwitchGuard.ts`,
+  gating every UI action that changes `profiles.activeProfileId` (the
+  header switcher, "Perfis"'s Ativar/Duplicar/+Novo Perfil, and removing
+  the active Profile):
+  - If `generation`/`deepSearch` hold anything not yet saved as a
+    Schedule Version (a `running` search, or a `feasible`/`done`-with-
+    candidates result), a native `confirm()` names what's at risk and
+    lets the user back out — the switch (and any Profile
+    creation/duplication that goes with it) doesn't happen if they
+    cancel.
+  - Otherwise (or once confirmed), both stores are reset
+    (`$reset()`, plus cancelling an in-progress Busca Aprofundada first
+    so its Worker pool doesn't keep computing for a Profile that's no
+    longer active) *before* the switch — so no screen can show a
+    previous Profile's stale ephemeral result, matching the user's own
+    "reset the UI" framing, not just the save-into-wrong-Profile risk.
+  - Deliberately a UI-layer gate (`profileSwitchGuard.ts`, called from
+    `AppHeader.vue`/`ProfilesView.vue`), not a wrapper inside
+    `profiles.ts`'s own `setActive`/`create`/`duplicate` actions —
+    guarding there would change `create`/`duplicate`'s return type to
+    possibly-`undefined`, a real signature break against their existing,
+    already-tested contract, for a concern that's fundamentally about the
+    UI's own confirm-and-proceed flow rather than the Profile data model
+    itself.
+- **Why**: reported directly by the user, with the concrete risk named
+  ("I could save this stuff in the wrong profile") — confirmed via a real
+  headless-Chromium walkthrough (generate a schedule, try to switch,
+  cancel leaves it untouched, confirm clears it) before considering this
+  fixed.
+- **Affected epics/tasks**: INTERLUDE-2 (`done` — a retrofit, not a
+  reopening of its checkpoint, same convention as D-47/D-48) and E13
+  (the second ephemeral store this bug covers).
+
 *(entries above are the most recent)*
