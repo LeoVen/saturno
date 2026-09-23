@@ -1376,4 +1376,36 @@ Template for a new entry:
 - **Affected epics/tasks**: E13-T3 (supersedes `generateDeep`, most of
   D-52 still stands: pool size/seeding/lifecycle/merge-scope), E13-T4.
 
+## D-54 — Candidate dedup: fractional Hamming distance over the assignment grid, 5% default threshold
+
+- **Date**: 2026-09-23
+- **Type**: Implementation-only
+- **Spec refs**: IMPL.md §3, §5.4, §10
+- **What changes**: `app/src/solver/candidateDedup.ts` — lives in the TS
+  Coordinator layer, not Rust/wasm, per IMPL.md §3's architecture diagram
+  ("Coordinator merges, deduplicates (§5.4), and ranks all candidates").
+  `scheduleDistanceFraction(a, b)`: builds each Schedule's "assignment
+  grid" as a `(classId, weekday, timeSlotId) -> (subjectId, teacherId)`
+  map (deliberately excluding `jointSessionPlacements` — identical across
+  every Candidate of one run, since the Refiner never touches them,
+  D-51), then divides the count of differing keys (including a key
+  present in only one) by the size of their union — a *fraction*, not a
+  raw count, so the threshold means the same thing regardless of whether
+  a school has 20 placements or 300. `dedupeCandidates(candidates,
+  thresholdFraction = 0.05)`: sorts best-score-first (`total`, lower
+  is better), then greedily keeps a Candidate only if it's not within
+  `thresholdFraction` of any Candidate *already kept* — never
+  re-compared against one that was itself dropped, so a chain of
+  near-duplicates collapses to its single best member rather than
+  surviving one per adjacent pair.
+- **Why**: IMPL.md §5.4 names the mechanism ("Hamming distance... below a
+  threshold") but explicitly leaves the exact metric and number open —
+  §10: "needs an actual number chosen empirically once real candidate
+  schedules exist to compare." 5% is a reasonable, documented starting
+  point (tight enough that legitimately distinct schedules survive, loose
+  enough to actually collapse the Refiner's small single-move
+  neighbors of a schedule it's already found), explicitly not validated
+  against real school data yet.
+- **Affected epics/tasks**: E13-T5.
+
 *(entries above are the most recent)*

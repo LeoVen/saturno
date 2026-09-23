@@ -40,7 +40,7 @@ them by schedule quality, and lets them watch progress and cancel early.
 | E13-T2 | Implement the Refiner: perturb + re-verify + accept/reject by score, simulated-annealing-style (IMPL.md §5.1) | done |
 | E13-T3 | Worker pool: spawn N Workers (capped, per `navigator.hardwareConcurrency`), each with an independent RNG seed (IMPL.md §5.2) | done |
 | E13-T4 | Progress streaming (`candidatesFoundSoFar`, `bestScoreSoFar`, `elapsedMs`) and cancellation flag, checked at slice boundaries (IMPL.md §5.3) | done |
-| E13-T5 | Deduplication of near-identical candidates before ranking (IMPL.md §5.4) | new |
+| E13-T5 | Deduplication of near-identical candidates before ranking (IMPL.md §5.4) | done |
 | E13-T6 | Coordinator: merge/rank candidates across Workers, hand the ranked list to the UI | new |
 | E13-T7 | UI: time-budget input, live progress display, cancel button, ranked candidate list, "adopt as version" action wired to E07 (FR-32–34) | new |
 | E13-T8 | Unit tests for `score` and the Refiner's hard-constraint preservation (TR-11) | new |
@@ -64,9 +64,8 @@ them by schedule quality, and lets them watch progress and cancel early.
   caller-supplied) so the Refiner stays deterministic/testable; a real
   `SliceResult` serde-casing bug caught and fixed (regression test
   added).
-- *(Deduplication threshold is still open — IMPL.md §10 flags it as
-  needing empirical tuning once real candidates exist. Log the actual
-  choice here once made.)*
+- See [D-54](../DECISIONS.md) — dedup's distance metric (fractional
+  Hamming distance over the assignment grid) and default threshold (5%).
 
 ## Notes
 
@@ -180,3 +179,17 @@ them by schedule quality, and lets them watch progress and cancel early.
   console errors in any run. The hung-pool bug above was only caught by
   this verification step — the Rust unit tests alone didn't exercise the
   actual wasm→JS serialization boundary.
+- **T5 implemented (2026-09-23)**: `app/src/solver/candidateDedup.ts`
+  (`scheduleDistanceFraction`, `dedupeCandidates`) — see
+  [D-54](../DECISIONS.md) for the metric and default threshold. Lives in
+  plain TS (IMPL.md §3 places dedup in the Coordinator, not Rust), so
+  unlike T3/T4 this is directly Vitest-unit-testable with no
+  Worker/wasm-boundary involved. 12 new tests
+  (`candidateDedup.test.ts`): identical/disjoint/partial-overlap distance
+  calculations, the no-placements divide-by-zero guard, empty/single-
+  candidate inputs, keeping the better-scoring one of two duplicates
+  regardless of input order, threshold sensitivity, and — the one most
+  worth calling out — a 3-candidate chain proving a dropped near-duplicate
+  is never used as a comparison anchor for a later candidate (only the
+  surviving *kept* set is). Full suite (202 tests), lint, and build all
+  green.
